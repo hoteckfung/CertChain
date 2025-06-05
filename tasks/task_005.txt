@@ -1,0 +1,24 @@
+# Task ID: 5
+# Title: Verifier Public Page & Certificate Validation
+# Status: pending
+# Dependencies: 3
+# Priority: high
+# Description: Implement public verification page for certificate validation by hash or QR code.
+# Details:
+Create a public page for verifiers to enter a hash or scan a QR code to validate certificates.
+
+# Test Strategy:
+Access /verify page and test with valid and invalid hashes/QR codes. Confirm correct results and issuer details are shown.
+
+# Subtasks:
+## 5.1. Verify by Hash or QR Code [pending]
+### Dependencies: None
+### Description: Allow verifiers to input a hash or scan a QR code to verify a certificate.
+### Details:
+Implement input field and QR scanner. Query blockchain for certificate validity.
+
+## 5.2. Display Verification Results & Issuer Details [pending]
+### Dependencies: 5.1
+### Description: Show whether the certificate is valid and display issuer information.
+### Details:
+Display result and issuer details from blockchain. Handle invalid or missing certificates gracefully.

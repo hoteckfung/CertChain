@@ -1,0 +1,653 @@
+{
+    "description": "A decentralized platform for managing digital certificates using blockchain technology",
+    "tasks": [
+        {
+            "id": "1",
+            "title": "Implement Authentication and Access Control",
+            "description": "Set up MetaMask wallet authentication and role-based access control for Admin, Issuer, and Holder. Public access for Verifier.",
+            "status": "pending",
+            "priority": "high",
+            "dependencies": [],
+            "details": "Implement MetaMask integration for login. Use RBAC to restrict access to dashboards. Allow admins to modify user roles. Ensure verifiers can access verification without login. New users should self-register by connecting their wallet.",
+            "testStrategy": "Test login/logout with MetaMask. Attempt to access restricted pages with different roles. Test admin ability to change user roles. Confirm verifiers can access public verification.",
+            "subtasks": [
+                {
+                    "id": "1.1",
+                    "title": "Integrate MetaMask Wallet Connection",
+                    "description": "Enable users to connect their MetaMask wallet for authentication.",
+                    "status": "pending",
+                    "details": "Use Ethers.js to connect MetaMask. Store wallet address in session. Handle connection errors and user rejection. Allow new users to self-register by connecting their wallet.",
+                    "dependencies": []
+                },
+                {
+                    "id": "1.2",
+                    "title": "Implement Role-Based Access Control (RBAC)",
+                    "description": "Restrict access to dashboards based on user role (Admin, Issuer, Holder).",
+                    "status": "pending",
+                    "details": "Implement RBAC logic in both frontend and smart contract. Map wallet addresses to roles. Default new users to holder role.",
+                    "dependencies": [
+                        "1.1"
+                    ]
+                },
+                {
+                    "id": "1.3",
+                    "title": "Public Verifier Access (No Wallet)",
+                    "description": "Allow verifiers to access certificate verification without authentication.",
+                    "status": "pending",
+                    "details": "Create a public verification page accessible without login. Ensure no sensitive data is exposed.",
+                    "dependencies": []
+                },
+                {
+                    "id": "1.4",
+                    "title": "Admin Role Management",
+                    "description": "Allow admins to modify user roles (e.g., change holders to issuers).",
+                    "status": "pending",
+                    "details": "Create admin interface to view all users and change their roles. Update MySQL database and smart contract permissions when roles are changed.",
+                    "dependencies": [
+                        "1.2"
+                    ]
+                }
+            ]
+        },
+        {
+            "id": "2",
+            "title": "Admin Dashboard Features",
+            "description": "Develop admin features for managing issuers, viewing users, and monitoring activities.",
+            "status": "pending",
+            "priority": "high",
+            "dependencies": [
+                "1"
+            ],
+            "details": "Create an admin dashboard for issuer management, user viewing, and activity monitoring. Integrate with MySQL for data storage.",
+            "testStrategy": "Log in as admin and verify ability to add/remove issuers, view users, and see activity logs.",
+            "subtasks": [
+                {
+                    "id": "2.1",
+                    "title": "Add/Remove Issuers by Wallet Address",
+                    "description": "Allow admin to add or remove issuers using their wallet addresses.",
+                    "status": "pending",
+                    "details": "Implement forms and backend logic to add/remove issuer roles. Update MySQL and smart contract as needed.",
+                    "dependencies": [
+                        "1.2"
+                    ]
+                },
+                {
+                    "id": "2.2",
+                    "title": "View All Holders and Issuers",
+                    "description": "Display a list of all holders and issuers with wallet addresses and activity.",
+                    "status": "pending",
+                    "details": "Query MySQL for user data. Show activity logs and filter by role.",
+                    "dependencies": [
+                        "2.1"
+                    ]
+                },
+                {
+                    "id": "2.3",
+                    "title": "Monitor Certificate Issuance and Verification Logs",
+                    "description": "Show logs of certificate issuance and verification activities.",
+                    "status": "pending",
+                    "details": "Integrate with MySQL activity logs. Display in dashboard with filters.",
+                    "dependencies": [
+                        "2.2"
+                    ]
+                }
+            ]
+        },
+        {
+            "id": "3",
+            "title": "Issuer Dashboard & Certificate Management",
+            "description": "Enable issuers to design, upload, and issue certificates, including IPFS and blockchain integration.",
+            "status": "pending",
+            "priority": "high",
+            "dependencies": [
+                "1"
+            ],
+            "details": "Build dashboard for issuers to generate, design, upload, and issue certificates. Integrate with IPFS and smart contracts.",
+            "testStrategy": "Log in as issuer and verify ability to upload Excel, design certificates, upload to IPFS, and issue certificates.",
+            "subtasks": [
+                {
+                    "id": "3.1",
+                    "title": "Bulk Certificate Generation via Excel Upload",
+                    "description": "Allow issuers to upload Excel files for bulk certificate creation.",
+                    "status": "pending",
+                    "details": "Parse Excel files, validate data, and prepare for certificate generation.",
+                    "dependencies": []
+                },
+                {
+                    "id": "3.2",
+                    "title": "Certificate Designer & Template Upload",
+                    "description": "Provide a drag-and-drop designer for certificate templates.",
+                    "status": "pending",
+                    "details": "Implement UI for template upload and element positioning. Save templates for reuse.",
+                    "dependencies": [
+                        "3.1"
+                    ]
+                },
+                {
+                    "id": "3.3",
+                    "title": "Upload Certificates to IPFS",
+                    "description": "Upload generated certificate files to IPFS for decentralized storage.",
+                    "status": "pending",
+                    "details": "Use ipfs-http-client to upload files. Store resulting IPFS hashes. Ensure only authorized issuers can upload (via smart contract validation).",
+                    "dependencies": [
+                        "3.2"
+                    ]
+                },
+                {
+                    "id": "3.4",
+                    "title": "Issue Certificates to Holders (Blockchain Record)",
+                    "description": "Record certificate issuance on the blockchain, linking to IPFS hashes.",
+                    "status": "pending",
+                    "details": "Call smart contract function to issue certificate with IPFS hash and cert type. Implement as ERC721 NFT token.",
+                    "dependencies": [
+                        "3.3",
+                        "6.1"
+                    ]
+                }
+            ]
+        },
+        {
+            "id": "4",
+            "title": "Holder Dashboard & Certificate Management",
+            "description": "Allow holders to view, download, share, and monitor their certificates.",
+            "status": "pending",
+            "priority": "high",
+            "dependencies": [
+                "1",
+                "3"
+            ],
+            "details": "Create dashboard for holders to manage certificates, download files, generate QR codes, and monitor status.",
+            "testStrategy": "Log in as holder and verify ability to view, download, share, and monitor certificates.",
+            "subtasks": [
+                {
+                    "id": "4.1",
+                    "title": "View and Edit Profile Information",
+                    "description": "Allow holders to view and update their profile details.",
+                    "status": "pending",
+                    "details": "Integrate with MySQL for profile storage and updates.",
+                    "dependencies": []
+                },
+                {
+                    "id": "4.2",
+                    "title": "View All Certificates (with IPFS Hash)",
+                    "description": "Display all certificates issued to the holder, including IPFS hashes.",
+                    "status": "pending",
+                    "details": "Query blockchain for certificate metadata. Show in dashboard.",
+                    "dependencies": [
+                        "3.4"
+                    ]
+                },
+                {
+                    "id": "4.3",
+                    "title": "Download Certificates (PDF, JPEG, PNG)",
+                    "description": "Enable holders to download certificates in multiple formats.",
+                    "status": "pending",
+                    "details": "Provide download links for each format. Use public IPFS gateways.",
+                    "dependencies": [
+                        "4.2"
+                    ]
+                },
+                {
+                    "id": "4.4",
+                    "title": "Generate QR Codes for Sharing",
+                    "description": "Generate QR codes for each certificate, linking to verification page.",
+                    "status": "pending",
+                    "details": "Create QR code generator. Link to /verify route with IPFS hash.",
+                    "dependencies": [
+                        "4.2"
+                    ]
+                },
+                {
+                    "id": "4.5",
+                    "title": "Share Certificates via IPFS Links",
+                    "description": "Allow holders to share certificates using IPFS links.",
+                    "status": "pending",
+                    "details": "Provide shareable links using public IPFS gateways.",
+                    "dependencies": [
+                        "4.2"
+                    ]
+                },
+                {
+                    "id": "4.6",
+                    "title": "Monitor Certificate Status",
+                    "description": "Show the status of each certificate (pending, issued, verified, rejected).",
+                    "status": "pending",
+                    "details": "Display status from blockchain metadata. Update in real time if possible.",
+                    "dependencies": [
+                        "4.2"
+                    ]
+                }
+            ]
+        },
+        {
+            "id": "5",
+            "title": "Verifier Public Page & Certificate Validation",
+            "description": "Implement public verification page for certificate validation by hash or QR code.",
+            "status": "pending",
+            "priority": "high",
+            "dependencies": [
+                "3"
+            ],
+            "details": "Create a public page for verifiers to enter a hash or scan a QR code to validate certificates.",
+            "testStrategy": "Access /verify page and test with valid and invalid hashes/QR codes. Confirm correct results and issuer details are shown.",
+            "subtasks": [
+                {
+                    "id": "5.1",
+                    "title": "Verify by Hash or QR Code",
+                    "description": "Allow verifiers to input a hash or scan a QR code to verify a certificate.",
+                    "status": "pending",
+                    "details": "Implement input field and QR scanner. Query blockchain for certificate validity.",
+                    "dependencies": []
+                },
+                {
+                    "id": "5.2",
+                    "title": "Display Verification Results & Issuer Details",
+                    "description": "Show whether the certificate is valid and display issuer information.",
+                    "status": "pending",
+                    "details": "Display result and issuer details from blockchain. Handle invalid or missing certificates gracefully.",
+                    "dependencies": [
+                        "5.1"
+                    ]
+                }
+            ]
+        },
+        {
+            "id": "6",
+            "title": "Smart Contract Development (Solidity)",
+            "description": "Develop and test smart contracts for certificate issuance, verification, and management.",
+            "status": "pending",
+            "priority": "high",
+            "dependencies": [],
+            "details": "Write Solidity contracts for certificate management. Include functions for issuing, verifying, and retrieving certificates. Implement RBAC in contract. Utilize ERC721 for NFT certificates.",
+            "testStrategy": "Write and run Mocha/Chai tests for all contract functions. Deploy to testnet and verify behavior.",
+            "subtasks": [
+                {
+                    "id": "6.1",
+                    "title": "issueCertificate(address, string, string)",
+                    "description": "Implement the smart contract function to issue a certificate.",
+                    "status": "pending",
+                    "details": "Write function to store certificate metadata (IPFS hash, type) for a user. Restrict to issuer role. Implement as ERC721 NFT token minting.",
+                    "dependencies": [
+                        "6.4",
+                        "6.6"
+                    ]
+                },
+                {
+                    "id": "6.2",
+                    "title": "verifyCertificate(string)",
+                    "description": "Implement the smart contract function to verify a certificate by IPFS hash.",
+                    "status": "pending",
+                    "details": "Write function to check if a certificate exists and is valid. Publicly accessible.",
+                    "dependencies": [
+                        "6.1"
+                    ]
+                },
+                {
+                    "id": "6.3",
+                    "title": "getUserCertificates(address)",
+                    "description": "Implement the smart contract function to retrieve all certificates for a user.",
+                    "status": "pending",
+                    "details": "Write function to return all certificate metadata for a given address.",
+                    "dependencies": [
+                        "6.1"
+                    ]
+                },
+                {
+                    "id": "6.4",
+                    "title": "Role-Based Access Control in Contract",
+                    "description": "Implement RBAC logic in the smart contract.",
+                    "status": "pending",
+                    "details": "Restrict functions to appropriate roles (admin, issuer, holder). Use OpenZeppelin RBAC patterns.",
+                    "dependencies": []
+                },
+                {
+                    "id": "6.5",
+                    "title": "Local Blockchain Setup with Ganache",
+                    "description": "Set up a local blockchain environment for development and testing.",
+                    "status": "pending",
+                    "details": "Install and configure Ganache. Create development accounts with test ETH. Configure Truffle to use Ganache.",
+                    "dependencies": []
+                },
+                {
+                    "id": "6.6",
+                    "title": "ERC721 Implementation for Certificate NFTs",
+                    "description": "Implement the ERC721 standard for certificate NFTs.",
+                    "status": "pending",
+                    "details": "Use OpenZeppelin ERC721 contracts. Customize for certificate metadata and ownership.",
+                    "dependencies": [
+                        "6.5"
+                    ]
+                },
+                {
+                    "id": "6.7",
+                    "title": "Contract Deployment & Testnet Setup",
+                    "description": "Deploy the smart contract to a testnet and verify deployment.",
+                    "status": "pending",
+                    "details": "Use Truffle for deployment. Deploy to Sepolia testnet. Verify contract on Etherscan.",
+                    "dependencies": [
+                        "6.1",
+                        "6.2",
+                        "6.3",
+                        "6.4",
+                        "6.6"
+                    ]
+                }
+            ]
+        },
+        {
+            "id": "7",
+            "title": "IPFS & Pinata Integration",
+            "description": "Integrate IPFS and Pinata for decentralized certificate storage and pinning.",
+            "status": "pending",
+            "priority": "medium",
+            "dependencies": [
+                "3"
+            ],
+            "details": "Integrate ipfs-http-client in frontend for uploads. Use Pinata API for pinning. Retrieve and display files from IPFS.",
+            "testStrategy": "Upload, pin, and retrieve a certificate file. Confirm file is accessible via public IPFS gateway.",
+            "subtasks": [
+                {
+                    "id": "7.1",
+                    "title": "Integrate ipfs-http-client in Frontend",
+                    "description": "Enable frontend to upload files to IPFS using ipfs-http-client.",
+                    "status": "pending",
+                    "details": "Install and configure ipfs-http-client. Implement upload logic in issuer dashboard.",
+                    "dependencies": []
+                },
+                {
+                    "id": "7.2",
+                    "title": "Pin Files with Pinata API",
+                    "description": "Use Pinata API to pin certificate files for persistence.",
+                    "status": "pending",
+                    "details": "Integrate Pinata API. Store pin status and handle errors.",
+                    "dependencies": [
+                        "7.1"
+                    ]
+                },
+                {
+                    "id": "7.3",
+                    "title": "Retrieve & Display Files from IPFS",
+                    "description": "Allow users to retrieve and view certificate files from IPFS.",
+                    "status": "pending",
+                    "details": "Use public IPFS gateways to fetch and display files in the UI.",
+                    "dependencies": [
+                        "7.2"
+                    ]
+                }
+            ]
+        },
+        {
+            "id": "8",
+            "title": "MySQL Database Integration",
+            "description": "Set up MySQL for user data, roles, and activity logs.",
+            "status": "pending",
+            "priority": "medium",
+            "dependencies": [
+                "1"
+            ],
+            "details": "Configure MySQL database, tables, and connections. Store user profiles, roles, and activity logs securely.",
+            "testStrategy": "Create, update, and query user profiles and logs in MySQL. Confirm data integrity.",
+            "subtasks": [
+                {
+                    "id": "8.1",
+                    "title": "Configure MySQL Database & Tables",
+                    "description": "Set up MySQL database and create necessary tables for users and logs.",
+                    "status": "pending",
+                    "details": "Create tables for users, roles, and activity logs. Set up connection pool and security.",
+                    "dependencies": []
+                },
+                {
+                    "id": "8.2",
+                    "title": "Store User Profiles & Roles",
+                    "description": "Implement logic to store and update user profiles and roles in MySQL.",
+                    "status": "pending",
+                    "details": "Integrate frontend with MySQL API for CRUD operations on profiles and roles.",
+                    "dependencies": [
+                        "8.1"
+                    ]
+                },
+                {
+                    "id": "8.3",
+                    "title": "Log Certificate Issuance & Verification",
+                    "description": "Record certificate issuance and verification events in MySQL logs.",
+                    "status": "pending",
+                    "details": "Log all relevant events from issuer and verifier actions. Display logs in admin dashboard.",
+                    "dependencies": [
+                        "8.2"
+                    ]
+                }
+            ]
+        },
+        {
+            "id": "9",
+            "title": "Frontend UI Implementation",
+            "description": "Develop Next.js pages and UI components for all user roles and flows.",
+            "status": "pending",
+            "priority": "high",
+            "dependencies": [
+                "1",
+                "3",
+                "6",
+                "7",
+                "8"
+            ],
+            "details": "Implement all required pages and UI components using Next.js, Tailwind CSS, and Shadcn UI. Integrate with backend and smart contracts.",
+            "testStrategy": "Navigate through all pages and verify correct rendering and data flow for each user role.",
+            "subtasks": [
+                {
+                    "id": "9.1",
+                    "title": "Home Page & Navigation",
+                    "description": "Create the home page and navigation bar for the app.",
+                    "status": "pending",
+                    "details": "Implement landing page and navigation links for all roles.",
+                    "dependencies": []
+                },
+                {
+                    "id": "9.2",
+                    "title": "Login Page (MetaMask)",
+                    "description": "Create a login page for MetaMask wallet connection.",
+                    "status": "pending",
+                    "details": "Implement MetaMask connect button and error handling.",
+                    "dependencies": [
+                        "1.1"
+                    ]
+                },
+                {
+                    "id": "9.3",
+                    "title": "Admin Dashboard UI",
+                    "description": "Build the UI for the admin dashboard.",
+                    "status": "pending",
+                    "details": "Create pages and components for admin features. Integrate with MySQL.",
+                    "dependencies": [
+                        "2",
+                        "8.2"
+                    ]
+                },
+                {
+                    "id": "9.4",
+                    "title": "Issuer Dashboard UI",
+                    "description": "Build the UI for the issuer dashboard.",
+                    "status": "pending",
+                    "details": "Create pages and components for issuer features. Integrate with smart contracts and IPFS.",
+                    "dependencies": [
+                        "3",
+                        "6.1",
+                        "7.1"
+                    ]
+                },
+                {
+                    "id": "9.5",
+                    "title": "Holder Dashboard UI",
+                    "description": "Build the UI for the holder dashboard.",
+                    "status": "pending",
+                    "details": "Create pages and components for holder features. Integrate with blockchain and IPFS.",
+                    "dependencies": [
+                        "4",
+                        "6.3",
+                        "7.3"
+                    ]
+                },
+                {
+                    "id": "9.6",
+                    "title": "Verifier Page UI",
+                    "description": "Build the UI for the public verifier page.",
+                    "status": "pending",
+                    "details": "Create pages and components for certificate verification. Integrate with smart contract.",
+                    "dependencies": [
+                        "5",
+                        "6.2"
+                    ]
+                }
+            ]
+        },
+        {
+            "id": "10",
+            "title": "Testing & QA",
+            "description": "Write and run tests for smart contracts and frontend flows.",
+            "status": "pending",
+            "priority": "medium",
+            "dependencies": [
+                "6",
+                "9"
+            ],
+            "details": "Write unit and integration tests for all major flows. Use Mocha/Chai for contracts and preferred frontend testing library.",
+            "testStrategy": "Run all tests and verify 100% pass rate. Test on testnet and local environments.",
+            "subtasks": [
+                {
+                    "id": "10.1",
+                    "title": "Mocha/Chai Smart Contract Tests",
+                    "description": "Write and execute tests for smart contract functions.",
+                    "status": "pending",
+                    "details": "Test all contract functions for expected and edge cases. Use Truffle's testing framework.",
+                    "dependencies": [
+                        "6"
+                    ]
+                },
+                {
+                    "id": "10.2",
+                    "title": "Frontend Integration Tests",
+                    "description": "Write and execute integration tests for frontend flows.",
+                    "status": "pending",
+                    "details": "Test all user flows and UI components. Mock blockchain and API calls as needed.",
+                    "dependencies": [
+                        "9"
+                    ]
+                },
+                {
+                    "id": "10.3",
+                    "title": "Local Blockchain Testing",
+                    "description": "Test the complete system on a local Ganache blockchain.",
+                    "status": "pending",
+                    "details": "Deploy contracts to Ganache. Test all user flows with local blockchain.",
+                    "dependencies": [
+                        "6.5",
+                        "10.1",
+                        "10.2"
+                    ]
+                }
+            ]
+        },
+        {
+            "id": "11",
+            "title": "Onboarding & User Experience Enhancements",
+            "description": "Improve onboarding, MetaMask setup, and user experience features.",
+            "status": "pending",
+            "priority": "low",
+            "dependencies": [
+                "1",
+                "9"
+            ],
+            "details": "Enhance onboarding flow, add drag-and-drop certificate generator, and implement pagination for large lists.",
+            "testStrategy": "Test onboarding, template creation, and pagination with large datasets.",
+            "subtasks": [
+                {
+                    "id": "11.1",
+                    "title": "MetaMask Onboarding Flow",
+                    "description": "Guide users through MetaMask setup and connection.",
+                    "status": "pending",
+                    "details": "Create onboarding screens and help content for MetaMask.",
+                    "dependencies": [
+                        "1.1",
+                        "9.2"
+                    ]
+                },
+                {
+                    "id": "11.2",
+                    "title": "Drag-and-Drop Certificate Generator",
+                    "description": "Allow issuers to create certificate templates with drag-and-drop UI.",
+                    "status": "pending",
+                    "details": "Implement drag-and-drop UI for template creation. Save templates for reuse.",
+                    "dependencies": [
+                        "3.2",
+                        "9.4"
+                    ]
+                },
+                {
+                    "id": "11.3",
+                    "title": "Pagination for Large Lists",
+                    "description": "Implement pagination for large lists of certificates and users.",
+                    "status": "pending",
+                    "details": "Add pagination controls to relevant UI lists. Optimize MySQL queries for performance.",
+                    "dependencies": [
+                        "9"
+                    ]
+                }
+            ]
+        },
+        {
+            "id": "12",
+            "title": "Security & Performance Optimization",
+            "description": "Implement security best practices and optimize for gas and performance.",
+            "status": "pending",
+            "priority": "medium",
+            "dependencies": [
+                "6",
+                "9"
+            ],
+            "details": "Review and enhance security in smart contracts and frontend. Optimize contract gas usage and frontend performance.",
+            "testStrategy": "Run security audits and performance benchmarks. Confirm no critical vulnerabilities or bottlenecks.",
+            "subtasks": [
+                {
+                    "id": "12.1",
+                    "title": "RBAC Security Review (Smart Contract & Frontend)",
+                    "description": "Review and improve RBAC implementation for security.",
+                    "status": "pending",
+                    "details": "Audit RBAC logic in both smart contract and frontend. Address any weaknesses.",
+                    "dependencies": [
+                        "6.4"
+                    ]
+                },
+                {
+                    "id": "12.2",
+                    "title": "Optimize Smart Contract Gas Usage",
+                    "description": "Analyze and optimize smart contract code for gas efficiency.",
+                    "status": "pending",
+                    "details": "Refactor contract code to minimize gas costs. Use efficient data structures.",
+                    "dependencies": [
+                        "6"
+                    ]
+                },
+                {
+                    "id": "12.3",
+                    "title": "Frontend Performance Tuning",
+                    "description": "Optimize frontend code for speed and responsiveness.",
+                    "status": "pending",
+                    "details": "Profile frontend performance and address bottlenecks. Use lazy loading and code splitting.",
+                    "dependencies": [
+                        "9"
+                    ]
+                },
+                {
+                    "id": "12.4",
+                    "title": "MySQL Query Optimization",
+                    "description": "Optimize MySQL queries for performance and security.",
+                    "status": "pending",
+                    "details": "Add indexes, optimize query patterns, implement proper parameterization against SQL injection.",
+                    "dependencies": [
+                        "8"
+                    ]
+                }
+            ]
+        }
+    ]
+}

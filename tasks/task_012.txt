@@ -1,0 +1,36 @@
+# Task ID: 12
+# Title: Security & Performance Optimization
+# Status: pending
+# Dependencies: 6, 9
+# Priority: medium
+# Description: Implement security best practices and optimize for gas and performance.
+# Details:
+Review and enhance security in smart contracts and frontend. Optimize contract gas usage and frontend performance.
+
+# Test Strategy:
+Run security audits and performance benchmarks. Confirm no critical vulnerabilities or bottlenecks.
+
+# Subtasks:
+## 12.1. RBAC Security Review (Smart Contract & Frontend) [pending]
+### Dependencies: 6.4
+### Description: Review and improve RBAC implementation for security.
+### Details:
+Audit RBAC logic in both smart contract and frontend. Address any weaknesses.
+
+## 12.2. Optimize Smart Contract Gas Usage [pending]
+### Dependencies: 6
+### Description: Analyze and optimize smart contract code for gas efficiency.
+### Details:
+Refactor contract code to minimize gas costs. Use efficient data structures.
+
+## 12.3. Frontend Performance Tuning [pending]
+### Dependencies: 9
+### Description: Optimize frontend code for speed and responsiveness.
+### Details:
+Profile frontend performance and address bottlenecks. Use lazy loading and code splitting.
+
+## 12.4. MySQL Query Optimization [pending]
+### Dependencies: 8
+### Description: Optimize MySQL queries for performance and security.
+### Details:
+Add indexes, optimize query patterns, implement proper parameterization against SQL injection.

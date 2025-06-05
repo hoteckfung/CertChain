@@ -1,0 +1,30 @@
+# Task ID: 11
+# Title: Onboarding & User Experience Enhancements
+# Status: pending
+# Dependencies: 1, 9
+# Priority: low
+# Description: Improve onboarding, MetaMask setup, and user experience features.
+# Details:
+Enhance onboarding flow, add drag-and-drop certificate generator, and implement pagination for large lists.
+
+# Test Strategy:
+Test onboarding, template creation, and pagination with large datasets.
+
+# Subtasks:
+## 11.1. MetaMask Onboarding Flow [pending]
+### Dependencies: 1.1, 9.2
+### Description: Guide users through MetaMask setup and connection.
+### Details:
+Create onboarding screens and help content for MetaMask.
+
+## 11.2. Drag-and-Drop Certificate Generator [pending]
+### Dependencies: 3.2, 9.4
+### Description: Allow issuers to create certificate templates with drag-and-drop UI.
+### Details:
+Implement drag-and-drop UI for template creation. Save templates for reuse.
+
+## 11.3. Pagination for Large Lists [pending]
+### Dependencies: 9
+### Description: Implement pagination for large lists of certificates and users.
+### Details:
+Add pagination controls to relevant UI lists. Optimize MySQL queries for performance.

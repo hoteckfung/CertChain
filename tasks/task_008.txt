@@ -1,0 +1,30 @@
+# Task ID: 8
+# Title: MySQL Database Integration
+# Status: pending
+# Dependencies: 1
+# Priority: medium
+# Description: Set up MySQL for user data, roles, and activity logs.
+# Details:
+Configure MySQL database, tables, and connections. Store user profiles, roles, and activity logs securely.
+
+# Test Strategy:
+Create, update, and query user profiles and logs in MySQL. Confirm data integrity.
+
+# Subtasks:
+## 8.1. Configure MySQL Database & Tables [done]
+### Dependencies: None
+### Description: Set up MySQL database and create necessary tables for users and logs.
+### Details:
+Create tables for users, roles, and activity logs. Set up connection pool and security.
+
+## 8.2. Store User Profiles & Roles [pending]
+### Dependencies: 8.1
+### Description: Implement logic to store and update user profiles and roles in MySQL.
+### Details:
+Integrate frontend with MySQL API for CRUD operations on profiles and roles.
+
+## 8.3. Log Certificate Issuance & Verification [pending]
+### Dependencies: 8.2
+### Description: Record certificate issuance and verification events in MySQL logs.
+### Details:
+Log all relevant events from issuer and verifier actions. Display logs in admin dashboard.

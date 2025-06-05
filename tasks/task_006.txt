@@ -1,0 +1,54 @@
+# Task ID: 6
+# Title: Smart Contract Development (Solidity)
+# Status: pending
+# Dependencies: None
+# Priority: high
+# Description: Develop and test smart contracts for certificate issuance, verification, and management.
+# Details:
+Write Solidity contracts for certificate management. Include functions for issuing, verifying, and retrieving certificates. Implement RBAC in contract. Utilize ERC721 for NFT certificates.
+
+# Test Strategy:
+Write and run Mocha/Chai tests for all contract functions. Deploy to testnet and verify behavior.
+
+# Subtasks:
+## 6.1. issueCertificate(address, string, string) [pending]
+### Dependencies: 6.4, 6.6
+### Description: Implement the smart contract function to issue a certificate.
+### Details:
+Write function to store certificate metadata (IPFS hash, type) for a user. Restrict to issuer role. Implement as ERC721 NFT token minting.
+
+## 6.2. verifyCertificate(string) [pending]
+### Dependencies: 6.1
+### Description: Implement the smart contract function to verify a certificate by IPFS hash.
+### Details:
+Write function to check if a certificate exists and is valid. Publicly accessible.
+
+## 6.3. getUserCertificates(address) [pending]
+### Dependencies: 6.1
+### Description: Implement the smart contract function to retrieve all certificates for a user.
+### Details:
+Write function to return all certificate metadata for a given address.
+
+## 6.4. Role-Based Access Control in Contract [pending]
+### Dependencies: None
+### Description: Implement RBAC logic in the smart contract.
+### Details:
+Restrict functions to appropriate roles (admin, issuer, holder). Use OpenZeppelin RBAC patterns.
+
+## 6.5. Local Blockchain Setup with Ganache [pending]
+### Dependencies: None
+### Description: Set up a local blockchain environment for development and testing.
+### Details:
+Install and configure Ganache. Create development accounts with test ETH. Configure Truffle to use Ganache.
+
+## 6.6. ERC721 Implementation for Certificate NFTs [pending]
+### Dependencies: 6.5
+### Description: Implement the ERC721 standard for certificate NFTs.
+### Details:
+Use OpenZeppelin ERC721 contracts. Customize for certificate metadata and ownership.
+
+## 6.7. Contract Deployment & Testnet Setup [pending]
+### Dependencies: 6.1, 6.2, 6.3, 6.4, 6.6
+### Description: Deploy the smart contract to a testnet and verify deployment.
+### Details:
+Use Truffle for deployment. Deploy to Sepolia testnet. Verify contract on Etherscan.

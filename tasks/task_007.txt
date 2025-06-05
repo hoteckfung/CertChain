@@ -1,0 +1,30 @@
+# Task ID: 7
+# Title: IPFS Integration
+# Status: pending
+# Dependencies: 3
+# Priority: medium
+# Description: Integrate IPFS for decentralized certificate storage.
+# Details:
+Integrate ipfs-http-client in frontend for uploads. Set up local IPFS node for pinning. Retrieve and display files from IPFS.
+
+# Test Strategy:
+Upload and retrieve a certificate file. Confirm file is accessible via public IPFS gateway.
+
+# Subtasks:
+## 7.1. Integrate ipfs-http-client in Frontend [pending]
+### Dependencies: None
+### Description: Enable frontend to upload files to IPFS using ipfs-http-client.
+### Details:
+Install and configure ipfs-http-client. Implement upload logic in issuer dashboard.
+
+## 7.2. Set Up Local IPFS Node [pending]
+### Dependencies: 7.1
+### Description: Configure and run a local IPFS node for file persistence.
+### Details:
+Install IPFS daemon. Configure node settings and pinning strategy.
+
+## 7.3. Retrieve & Display Files from IPFS [pending]
+### Dependencies: 7.2
+### Description: Allow users to retrieve and view certificate files from IPFS.
+### Details:
+Use public IPFS gateways to fetch and display files in the UI.
