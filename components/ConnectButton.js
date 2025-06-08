@@ -8,7 +8,7 @@ import {
   setUserRole,
   setUserId,
   ROLES,
-} from "../utils/auth";
+} from "../lib/auth-client";
 import MetaMaskIcon from "./MetaMaskIcon";
 
 const ConnectButton = ({ children, size, className, ...props }) => {

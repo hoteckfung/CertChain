@@ -6,7 +6,10 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "db:setup": "node scripts/setup-database.js",
+    "db:test": "node -e \"fetch('http://localhost:3000/api/db-test').then(r=>r.json()).then(console.log)\"",
+    "db:logs": "node -e \"fetch('http://localhost:3000/api/admin/activity-logs').then(r=>r.json()).then(d=>console.log(JSON.stringify(d,null,2)))\""
   },
   "dependencies": {
     "@hookform/resolvers": "^5.0.1",
@@ -26,7 +29,7 @@
     "jsqr": "^1.4.0",
     "lucide-react": "^0.510.0",
     "mysql2": "^3.14.1",
-    "next": "^13.4.7",
+    "next": "^15.3.3",
     "postcss": "^8.4.24",
     "qrcode.react": "^4.2.0",
     "react": "^18.2.0",

@@ -16,7 +16,7 @@ import { Alert, AlertDescription } from "../components/ui/alert";
 import UserRoleManager from "../components/UserRoleManager";
 import Link from "next/link";
 import { useRouter } from "next/router";
-import { ROLES, getAllUsers, updateUserRole } from "../utils/auth";
+import { ROLES } from "../lib/auth-client";
 import {
   BarChart,
   Bar,
