@@ -127,22 +127,49 @@ export function AuthProvider({ children }) {
       if (response.ok) {
         const data = await response.json();
         if (data.success && data.user) {
-          setUser({
+          const userData = {
             ...data.user,
             walletAddress: address,
-          });
+          };
+
+          setUser(userData);
+
+          // IMPORTANT: Also store in localStorage for _app.js compatibility
+          if (typeof window !== "undefined") {
+            localStorage.setItem("walletAddress", address);
+            localStorage.setItem("userRole", data.user.role);
+            localStorage.setItem("userId", data.user.id.toString());
+          }
         } else {
           setUser(null);
           setError(data.error || "Authentication failed");
+          // Clear localStorage on failure
+          if (typeof window !== "undefined") {
+            localStorage.removeItem("walletAddress");
+            localStorage.removeItem("userRole");
+            localStorage.removeItem("userId");
+          }
         }
       } else {
         setUser(null);
         setError("Login failed");
+        // Clear localStorage on failure
+        if (typeof window !== "undefined") {
+          localStorage.removeItem("walletAddress");
+          localStorage.removeItem("userRole");
+          localStorage.removeItem("userId");
+        }
       }
     } catch (err) {
       console.error("Error loading user data:", err);
       setError(err.message);
       setUser(null);
+      // Clear localStorage on error
+      if (typeof window !== "undefined") {
+        localStorage.removeItem("walletAddress");
+        localStorage.removeItem("userRole");
+        localStorage.removeItem("userId");
+      }
     } finally {
       setLoading(false);
     }
@@ -221,6 +248,13 @@ export function AuthProvider({ children }) {
           setUser(null);
           setRoleVerificationCache(null);
           setLastVerification(null);
+
+          // Clear localStorage
+          if (typeof window !== "undefined") {
+            localStorage.removeItem("walletAddress");
+            localStorage.removeItem("userRole");
+            localStorage.removeItem("userId");
+          }
 
           if (!publicRoutes.includes(router.pathname)) {
             router.push("/login");
@@ -320,6 +354,13 @@ export function AuthProvider({ children }) {
     setRoleVerificationCache(null);
     setLastVerification(null);
     setError(null);
+
+    // Clear localStorage for _app.js compatibility
+    if (typeof window !== "undefined") {
+      localStorage.removeItem("walletAddress");
+      localStorage.removeItem("userRole");
+      localStorage.removeItem("userId");
+    }
 
     // Clear any intervals
     if (roleVerificationIntervalRef.current) {

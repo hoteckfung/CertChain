@@ -36,7 +36,7 @@ const ProtectedRoute = ({ children, allowedRoles }) => {
 
         // Special case: hardcoded admin address
         const adminAddress =
-          "0x88Fd1ecd3Fd9A408deD64c6eE69764f7f997aB48".toLowerCase();
+          "0x241dBc6d5f283964536A94e33E2323B7580CE45A".toLowerCase();
         if (walletAddress && walletAddress.toLowerCase() === adminAddress) {
           console.log("Admin address detected in ProtectedRoute");
           if (allowedRoles.includes("admin")) {
