@@ -86,7 +86,7 @@ export default function Login() {
       }
     };
 
-    checkConnection();
+      checkConnection();
   }, []);
 
   const handleConnectWallet = async () => {

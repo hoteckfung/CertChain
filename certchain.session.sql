@@ -96,7 +96,7 @@ INSERT INTO users (
         last_active
     )
 VALUES (
-        '0x88fd1ecd3fd9a408ded64c6ee69764f7f997ab48',
+        '0x241dBc6d5f283964536A94e33E2323B7580CE45A',
         'admin',
         'System Admin',
         JSON_ARRAY(

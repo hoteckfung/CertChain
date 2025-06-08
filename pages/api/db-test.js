@@ -1,6 +1,10 @@
 import mysql from "../../utils/mysql";
 
 export default async function handler(req, res) {
+  if (req.method !== "GET") {
+    return res.status(405).json({ error: "Method not allowed" });
+  }
+
   try {
     // Test database connection
     const { connected, error } = await mysql.checkConnection();
@@ -8,18 +12,12 @@ export default async function handler(req, res) {
     if (!connected) {
       return res.status(500).json({
         status: "error",
-        message: "Database connection failed",
-        error: error?.message || "Unknown error",
-        config: {
-          host: process.env.MYSQL_HOST || "localhost",
-          port: process.env.MYSQL_PORT || 3306,
-          user: process.env.MYSQL_USER || "root",
-          database: process.env.MYSQL_DATABASE || "certchain",
-        },
+        error: error?.message || "Database connection failed",
+        code: error?.code || "CONNECTION_ERROR",
       });
     }
 
-    // Test a simple query
+    // Test basic query
     const { data, error: queryError } = await mysql.query(
       "SELECT COUNT(*) as user_count FROM users"
     );
@@ -27,8 +25,8 @@ export default async function handler(req, res) {
     if (queryError) {
       return res.status(500).json({
         status: "error",
-        message: "Database query failed",
-        error: queryError.message,
+        error: "Database query failed",
+        details: queryError.message,
       });
     }
 
@@ -42,8 +40,8 @@ export default async function handler(req, res) {
     console.error("Database test error:", error);
     res.status(500).json({
       status: "error",
-      message: "Database test failed",
-      error: error.message,
+      error: "Internal server error",
+      details: error.message,
     });
   }
 }

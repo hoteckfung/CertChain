@@ -1,10 +1,9 @@
 import { ethers } from "ethers";
-import mysql from "./mysql";
-
 // Functions to connect to MetaMask
 // Functions to handle account/chain changes
 // Automatic user registration for new wallets
 // Signing functionality for transactions
+// Note: This file runs in the browser, so no direct database access
 
 /**
  * Connects to MetaMask wallet and returns provider and wallet address
@@ -54,7 +53,7 @@ export async function connectWallet() {
     const signer = await provider.getSigner();
     const address = await signer.getAddress();
 
-    // Log the wallet connection activity
+    // Log the wallet connection activity via API
     await logWalletActivity(address, "connect");
 
     return { provider, address };
@@ -127,45 +126,37 @@ export async function getCurrentWalletAddress() {
 }
 
 /**
- * Logs wallet activity to the database
+ * Logs wallet activity via API call (browser-safe)
  * @param {string} walletAddress - User's wallet address
  * @param {string} action - Action performed (connect, disconnect)
  */
 async function logWalletActivity(walletAddress, action) {
   try {
-    // Check if user exists in database
-    const { data: user } = await mysql.getUserByWalletAddress(walletAddress);
+    // Call the login API which handles user creation and activity logging
+    const response = await fetch("/api/auth/login", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      credentials: "include",
+      body: JSON.stringify({
+        walletAddress: walletAddress,
+        userData: {
+          action: `wallet_${action}`,
+          timestamp: new Date().toISOString(),
+        },
+      }),
+    });
 
-    if (user) {
-      // Update last active time
-      await mysql.updateUserLastActive(walletAddress);
-
-      // Log activity
-      await mysql.logActivity({
-        user_id: user.id,
-        action: `wallet_${action}`,
-        details: `Wallet ${action} at ${new Date().toISOString()}`,
-        wallet_address: walletAddress,
-      });
-    } else if (action === "connect") {
-      // New user - create account with default holder role
-      const { data: newUser, error } = await mysql.createUser({
-        wallet_address: walletAddress,
-        role: "holder",
-        username: `User_${walletAddress.slice(0, 6)}`,
-      });
-
-      if (!error && newUser) {
-        await mysql.logActivity({
-          user_id: newUser.id,
-          action: "account_created",
-          details: `New account created via wallet connection`,
-          wallet_address: walletAddress,
-        });
-      }
+    if (!response.ok) {
+      throw new Error(`API call failed: ${response.status}`);
     }
+
+    const data = await response.json();
+    return data;
   } catch (error) {
     console.error("Error logging wallet activity:", error);
+    // Don't throw - wallet connection should still work even if logging fails
   }
 }
 
