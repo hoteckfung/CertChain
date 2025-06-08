@@ -72,12 +72,13 @@ export default async function handler(req, res) {
       }
 
       // Validate phone number format if provided (basic validation)
-      if (
-        phone_number &&
-        phone_number.length > 0 &&
-        !/^[\+]?[1-9][\d\s\-\(\)]{7,15}$/.test(phone_number.replace(/\s/g, ""))
-      ) {
-        return res.status(400).json({ error: "Invalid phone number format" });
+      if (phone_number && phone_number.length > 0) {
+        // Remove all spaces, hyphens, and parentheses for validation
+        const cleanedPhone = phone_number.replace(/[\s\-\(\)]/g, "");
+        // Allow + followed by 7-15 digits, first digit can be 0-9
+        if (!/^[\+]?[0-9]{7,15}$/.test(cleanedPhone)) {
+          return res.status(400).json({ error: "Invalid phone number format" });
+        }
       }
 
       const profileData = {

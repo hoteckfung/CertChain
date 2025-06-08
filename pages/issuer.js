@@ -676,6 +676,26 @@ export default function IssuerPage() {
     }
   };
 
+  // Helper function to update DOM content directly and wait for changes
+  const updateCertificateContentAndCapture = async (
+    recipientNameValue,
+    certificateIdValue
+  ) => {
+    return new Promise((resolve) => {
+      // Update React state
+      setRecipientName(recipientNameValue);
+      setCertificateId(certificateIdValue);
+
+      // Use requestAnimationFrame to ensure DOM updates are complete
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          // Double RAF to ensure all updates are flushed
+          resolve();
+        });
+      });
+    });
+  };
+
   // Generate certificates for all Excel data
   const generateBulkCertificates = async () => {
     if (processedExcelData.length === 0) {
@@ -711,6 +731,7 @@ export default function IssuerPage() {
 
       // Store the original recipient name
       const originalName = recipientName;
+      const originalCertId = certificateId;
 
       for (let i = 0; i < processedExcelData.length; i++) {
         const recipient = processedExcelData[i];
@@ -723,25 +744,22 @@ export default function IssuerPage() {
           issuerName,
           issueDate
         );
-        setCertificateId(uniqueHash);
 
-        // Temporarily set the recipient name for this certificate
-        setRecipientName(
-          recipient.Name || recipient.name || `Recipient ${i + 1}`
+        const currentRecipientName =
+          recipient.Name || recipient.name || `Recipient ${i + 1}`;
+
+        // Update certificate content and wait for DOM to reflect changes
+        await updateCertificateContentAndCapture(
+          currentRecipientName,
+          uniqueHash
         );
 
-        // Wait longer for the state to update and re-render
-        await new Promise((resolve) => setTimeout(resolve, 800));
-
-        // Force a repaint/reflow to ensure positioning is applied
+        // Get certificate element
         const certificateElement = certificateContainerRef.current;
         if (!certificateElement) continue;
 
         // Force reflow by accessing offsetHeight
         certificateElement.offsetHeight;
-
-        // Get the exact bounds of the certificate container
-        const rect = certificateElement.getBoundingClientRect();
 
         // Temporarily hide edit mode styling for clean capture
         const draggableElements =
@@ -806,8 +824,6 @@ export default function IssuerPage() {
         pdf.addImage(imgData, "PNG", x, y, finalWidth, finalHeight);
 
         // Generate filename
-        const currentRecipientName =
-          recipient.Name || recipient.name || `Recipient_${i + 1}`;
         const filename = `${currentRecipientName.replace(
           /[^a-zA-Z0-9]/g,
           "_"
@@ -820,8 +836,9 @@ export default function IssuerPage() {
         await new Promise((resolve) => setTimeout(resolve, 500));
       }
 
-      // Restore original recipient name
+      // Restore original recipient name and certificate ID
       setRecipientName(originalName);
+      setCertificateId(originalCertId);
 
       showSuccess(
         `Successfully generated ${processedExcelData.length} certificates!`
@@ -829,6 +846,10 @@ export default function IssuerPage() {
     } catch (error) {
       console.error("Error generating bulk certificates:", error);
       showError(`Error generating bulk certificates: ${error.message}`);
+
+      // Restore original values on error
+      setRecipientName(originalName);
+      setCertificateId(originalCertId);
     }
   };
 
