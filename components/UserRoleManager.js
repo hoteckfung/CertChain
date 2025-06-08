@@ -33,6 +33,7 @@ import {
   AlertCircle,
   Search,
   RefreshCw,
+  Trash2,
 } from "lucide-react";
 
 const UserRoleManager = () => {
@@ -45,6 +46,7 @@ const UserRoleManager = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [updatingUserId, setUpdatingUserId] = useState(null);
   const [lastUpdated, setLastUpdated] = useState(null);
+  const [deletingUserId, setDeletingUserId] = useState(null);
 
   // Hardcoded admin address for special handling
   const adminAddress =
@@ -146,6 +148,70 @@ const UserRoleManager = () => {
     }
   };
 
+  const handleDeleteUser = async (userId, userWalletAddress) => {
+    // Show confirmation
+    if (
+      !confirm(
+        `Are you sure you want to delete user ${userWalletAddress}? This action cannot be undone.`
+      )
+    ) {
+      return;
+    }
+
+    setSuccess("");
+    setError("");
+    setDeletingUserId(userId);
+
+    try {
+      const response = await fetch("/api/admin/users", {
+        method: "DELETE",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        credentials: "include",
+        body: JSON.stringify({ userId }),
+      });
+
+      if (!response.ok) {
+        // Try to parse as JSON, but handle case where response is HTML
+        const contentType = response.headers.get("content-type");
+        let errorMessage = `HTTP ${response.status}: ${response.statusText}`;
+
+        if (contentType && contentType.includes("application/json")) {
+          try {
+            const errorData = await response.json();
+            errorMessage = errorData.error || errorMessage;
+          } catch (jsonError) {
+            console.error("Error parsing JSON:", jsonError);
+          }
+        } else {
+          // Response is likely HTML (error page)
+          const responseText = await response.text();
+          console.error("Non-JSON response:", responseText);
+          errorMessage =
+            "Server returned an error page instead of JSON. Check browser console for details.";
+        }
+
+        throw new Error(errorMessage);
+      }
+
+      // Remove user from local state
+      setUsers(users.filter((user) => user.id !== userId));
+
+      setSuccess("User deleted successfully");
+
+      // Clear success message after 3 seconds
+      setTimeout(() => {
+        setSuccess("");
+      }, 3000);
+    } catch (err) {
+      console.error("Failed to delete user:", err);
+      setError("Failed to delete user: " + (err.message || "Unknown error"));
+    } finally {
+      setDeletingUserId(null);
+    }
+  };
+
   // Filter users based on search term
   const filteredUsers = users.filter((user) => {
     if (!searchTerm) return true;
@@ -233,6 +299,7 @@ const UserRoleManager = () => {
                   <TableHead>Username</TableHead>
                   <TableHead>Current Role</TableHead>
                   <TableHead>Change Role</TableHead>
+                  <TableHead>Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -286,6 +353,24 @@ const UserRoleManager = () => {
                         <p className="text-xs text-gray-500 mt-1">
                           Cannot change primary admin
                         </p>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      {user.wallet_address.toLowerCase() !== adminAddress && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          disabled={deletingUserId === user.id}
+                          onClick={() =>
+                            handleDeleteUser(user.id, user.wallet_address)
+                          }
+                          className="text-red-600 hover:text-red-800 hover:bg-red-50">
+                          {deletingUserId === user.id ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <Trash2 className="h-4 w-4" />
+                          )}
+                        </Button>
                       )}
                     </TableCell>
                   </TableRow>

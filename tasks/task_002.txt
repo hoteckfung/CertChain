@@ -11,13 +11,13 @@ Create an admin dashboard for issuer management, user viewing, and activity moni
 Log in as admin and verify ability to add/remove issuers, view users, and see activity logs.
 
 # Subtasks:
-## 2.1. Add/Remove Issuers by Wallet Address [pending]
+## 2.1. Add/Remove Issuers by Wallet Address [done]
 ### Dependencies: 1.2
 ### Description: Allow admin to add or remove issuers using their wallet addresses.
 ### Details:
 Implement forms and backend logic to add/remove issuer roles. Update MySQL and smart contract as needed.
 
-## 2.2. View All Holders and Issuers [pending]
+## 2.2. View All Holders and Issuers [done]
 ### Dependencies: 2.1
 ### Description: Display a list of all holders and issuers with wallet addresses and activity.
 ### Details:

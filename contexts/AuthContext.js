@@ -367,8 +367,8 @@ export function AuthProvider({ children }) {
       clearInterval(roleVerificationIntervalRef.current);
     }
 
-    // Redirect to login
-    router.push("/login");
+    // Redirect to home page
+    router.push("/");
   };
 
   // Force role refresh (for after admin changes)
