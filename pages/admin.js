@@ -236,24 +236,6 @@ export default function AdminPage() {
                   </button>
                   <button
                     className={`whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm ${
-                      activeTab === "issuers"
-                        ? "border-blue-500 text-blue-600"
-                        : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
-                    }`}
-                    onClick={() => setActiveTab("issuers")}>
-                    Issuer
-                  </button>
-                  <button
-                    className={`whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm ${
-                      activeTab === "holders"
-                        ? "border-blue-500 text-blue-600"
-                        : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
-                    }`}
-                    onClick={() => setActiveTab("holders")}>
-                    Holder
-                  </button>
-                  <button
-                    className={`whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm ${
                       activeTab === "activity"
                         ? "border-blue-500 text-blue-600"
                         : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
@@ -285,76 +267,6 @@ export default function AdminPage() {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
               {/* Main Content */}
               <div className="md:col-span-2">
-                {/* Issuer Management Tab */}
-                {activeTab === "issuers" && (
-                  <div className="bg-white rounded-lg shadow-sm p-6">
-                    <h2 className="text-xl font-semibold mb-4">
-                      Manage Issuer
-                    </h2>
-                    <div className="overflow-x-auto">
-                      <table className="min-w-full divide-y divide-gray-200">
-                        <thead>
-                          <tr>
-                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                              Name
-                            </th>
-                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                              Wallet Address
-                            </th>
-                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                              Date Added
-                            </th>
-                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                              Status
-                            </th>
-                            <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                              Actions
-                            </th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-gray-200">
-                          {issuers.map((issuer) => (
-                            <tr key={issuer.id}>
-                              <td className="px-4 py-3 whitespace-nowrap">
-                                {issuer.name}
-                              </td>
-                              <td className="px-4 py-3 whitespace-nowrap font-mono text-sm">
-                                {issuer.address}
-                              </td>
-                              <td className="px-4 py-3 whitespace-nowrap">
-                                {issuer.dateAdded}
-                              </td>
-                              <td className="px-4 py-3 whitespace-nowrap">
-                                <span
-                                  className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                                    issuer.status === "Active"
-                                      ? "bg-green-100 text-green-800"
-                                      : "bg-red-100 text-red-800"
-                                  }`}>
-                                  {issuer.status}
-                                </span>
-                              </td>
-                              <td className="px-4 py-3 whitespace-nowrap text-right text-sm font-medium">
-                                {issuer.status === "Active" ? (
-                                  <button
-                                    onClick={() =>
-                                      handleRemoveIssuer(issuer.id)
-                                    }
-                                    className="text-red-600 hover:text-red-900">
-                                    Remove
-                                  </button>
-                                ) : (
-                                  <span className="text-gray-400">Removed</span>
-                                )}
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                )}
-
                 {/* All User Details Tab */}
                 {activeTab === "users" && (
                   <div className="bg-white rounded-lg shadow-sm p-6">
@@ -601,59 +513,6 @@ export default function AdminPage() {
 
               {/* Sidebar */}
               <div className="md:col-span-1">
-                {/* Add Issuer Form */}
-                {activeTab === "issuers" && (
-                  <div className="bg-white rounded-lg shadow-sm p-6">
-                    <h2 className="text-xl font-semibold mb-4">
-                      Add New Issuer
-                    </h2>
-                    <form onSubmit={handleAddIssuer}>
-                      <div className="mb-4">
-                        <label
-                          htmlFor="issuerName"
-                          className="block text-sm font-medium text-gray-700 mb-1">
-                          Issuer Name
-                        </label>
-                        <input
-                          type="text"
-                          id="issuerName"
-                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-blue"
-                          placeholder="E.g., University of Blockchain"
-                          value={newIssuer.name}
-                          onChange={(e) =>
-                            setNewIssuer({ ...newIssuer, name: e.target.value })
-                          }
-                          required
-                        />
-                      </div>
-                      <div className="mb-4">
-                        <label
-                          htmlFor="walletAddress"
-                          className="block text-sm font-medium text-gray-700 mb-1">
-                          Wallet Address
-                        </label>
-                        <input
-                          type="text"
-                          id="walletAddress"
-                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-blue font-mono"
-                          placeholder="0x..."
-                          value={newIssuer.address}
-                          onChange={(e) =>
-                            setNewIssuer({
-                              ...newIssuer,
-                              address: e.target.value,
-                            })
-                          }
-                          required
-                        />
-                      </div>
-                      <Button type="submit" className="w-full">
-                        Add Issuer
-                      </Button>
-                    </form>
-                  </div>
-                )}
-
                 {/* User Stats */}
                 {activeTab === "users" && (
                   <div className="bg-white rounded-lg shadow-sm p-6">

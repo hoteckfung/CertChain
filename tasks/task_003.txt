@@ -11,19 +11,19 @@ Build dashboard for issuers to generate, design, upload, and issue certificates.
 Log in as issuer and verify ability to upload Excel, design certificates, upload to IPFS, and issue certificates.
 
 # Subtasks:
-## 3.1. Bulk Certificate Generation via Excel Upload [pending]
+## 3.1. Bulk Certificate Generation via Excel Upload [done]
 ### Dependencies: None
 ### Description: Allow issuers to upload Excel files for bulk certificate creation.
 ### Details:
 Parse Excel files, validate data, and prepare for certificate generation.
 
-## 3.2. Certificate Designer & Template Upload [pending]
+## 3.2. Certificate Designer & Template Upload [done]
 ### Dependencies: 3.1
 ### Description: Provide a drag-and-drop designer for certificate templates.
 ### Details:
 Implement UI for template upload and element positioning. Save templates for reuse.
 
-## 3.3. Upload Certificates to IPFS [pending]
+## 3.3. Upload Certificates to IPFS [done]
 ### Dependencies: 3.2
 ### Description: Upload generated certificate files to IPFS for decentralized storage.
 ### Details:

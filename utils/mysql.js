@@ -3,7 +3,7 @@ import mysql from "mysql2/promise";
 // Create a connection pool
 const pool = mysql.createPool({
   host: process.env.MYSQL_HOST || "localhost",
-  port: process.env.MYSQL_PORT || 3306,
+  port: process.env.MYSQL_PORT || 3333,
   user: process.env.MYSQL_USER || "root",
   password: process.env.MYSQL_PASSWORD || "mysql",
   database: process.env.MYSQL_DATABASE || "certchain",
@@ -105,6 +105,14 @@ export async function updateUserRole(userId, newRole) {
   return { data, error };
 }
 
+export async function deleteUser(userId) {
+  const { data, error } = await query("DELETE FROM users WHERE id = ?", [
+    userId,
+  ]);
+
+  return { data, error };
+}
+
 // Enhanced activity logging with severity and metadata
 export async function logActivity(activity) {
   const {
@@ -179,6 +187,100 @@ export async function checkConnection() {
   }
 }
 
+// Profile operations
+export async function getProfileByWalletAddress(walletAddress) {
+  const { data, error } = await query(
+    "SELECT * FROM holder_profiles WHERE wallet_address = ? LIMIT 1",
+    [walletAddress.toLowerCase()]
+  );
+
+  if (error) return { data: null, error };
+  return { data: data[0] || null, error: null };
+}
+
+export async function createProfile(profileData) {
+  const {
+    wallet_address,
+    full_name,
+    email,
+    phone_number,
+    privacy_settings = {},
+  } = profileData;
+
+  const privacyJson = JSON.stringify(privacy_settings);
+
+  const { data, error } = await query(
+    "INSERT INTO holder_profiles (wallet_address, full_name, email, phone_number, privacy_settings, created_at, updated_at) VALUES (?, ?, ?, ?, ?, NOW(), NOW())",
+    [wallet_address.toLowerCase(), full_name, email, phone_number, privacyJson]
+  );
+
+  if (error) return { data: null, error };
+
+  // Return the inserted profile
+  return getProfileByWalletAddress(wallet_address);
+}
+
+export async function updateProfile(walletAddress, profileData) {
+  const { full_name, email, phone_number, privacy_settings } = profileData;
+
+  const privacyJson = privacy_settings
+    ? JSON.stringify(privacy_settings)
+    : null;
+
+  // Build the update query dynamically based on provided fields
+  const updates = [];
+  const values = [];
+
+  if (full_name !== undefined) {
+    updates.push("full_name = ?");
+    values.push(full_name);
+  }
+  if (email !== undefined) {
+    updates.push("email = ?");
+    values.push(email);
+  }
+  if (phone_number !== undefined) {
+    updates.push("phone_number = ?");
+    values.push(phone_number);
+  }
+  if (privacy_settings !== undefined) {
+    updates.push("privacy_settings = ?");
+    values.push(privacyJson);
+  }
+
+  if (updates.length === 0) {
+    return { data: null, error: new Error("No fields to update") };
+  }
+
+  updates.push("updated_at = NOW()");
+  values.push(walletAddress.toLowerCase());
+
+  const { data, error } = await query(
+    `UPDATE holder_profiles SET ${updates.join(", ")} WHERE wallet_address = ?`,
+    values
+  );
+
+  if (error) return { data: null, error };
+
+  // Return the updated profile
+  return getProfileByWalletAddress(walletAddress);
+}
+
+export async function upsertProfile(profileData) {
+  const { wallet_address } = profileData;
+
+  // Check if profile exists
+  const { data: existingProfile } = await getProfileByWalletAddress(
+    wallet_address
+  );
+
+  if (existingProfile) {
+    return updateProfile(wallet_address, profileData);
+  } else {
+    return createProfile(profileData);
+  }
+}
+
 export default {
   query,
   getUserByWalletAddress,
@@ -187,8 +289,13 @@ export default {
   updateUserLastActive,
   getAllUsers,
   updateUserRole,
+  deleteUser,
   logActivity,
   getActivityLogs,
+  getProfileByWalletAddress,
+  createProfile,
+  updateProfile,
+  upsertProfile,
   initializeDatabase,
   checkConnection,
 };

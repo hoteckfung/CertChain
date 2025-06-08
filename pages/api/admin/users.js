@@ -95,6 +95,70 @@ export default async function handler(req, res) {
         message: "User role updated successfully",
         user: updatedUser,
       });
+    } else if (req.method === "DELETE") {
+      // Delete user
+      console.log("DELETE request received, body:", req.body);
+      const { userId } = req.body;
+
+      if (!userId) {
+        console.log("No userId provided");
+        return res.status(400).json({ error: "User ID is required" });
+      }
+
+      console.log("Attempting to delete user:", userId);
+
+      // Get user data before deletion for logging
+      const { data: allUsers } = await mysql.getAllUsers();
+      const targetUser = allUsers.find((u) => u.id === parseInt(userId));
+
+      if (!targetUser) {
+        return res.status(404).json({ error: "User not found" });
+      }
+
+      // Prevent admin from deleting themselves
+      if (
+        targetUser.wallet_address.toLowerCase() ===
+        user.wallet_address.toLowerCase()
+      ) {
+        return res.status(400).json({ error: "Cannot delete yourself" });
+      }
+
+      try {
+        // Delete user from database
+        const { error: deleteError } = await mysql.deleteUser(userId);
+
+        if (deleteError) {
+          console.error("Delete user error:", deleteError);
+          return res.status(500).json({
+            error: "Failed to delete user",
+            details: deleteError.message || "Database error",
+          });
+        }
+
+        // Clear user cache
+        clearUserCache(targetUser.wallet_address);
+
+        // Log the user deletion activity
+        await mysql.logActivity({
+          user_id: user.id,
+          action: "user_deleted",
+          details: `Deleted user ${
+            targetUser.username || targetUser.wallet_address
+          }`,
+          wallet_address: user.wallet_address,
+        });
+      } catch (dbError) {
+        console.error("Database deletion error:", dbError);
+        return res.status(500).json({
+          error: "Database error during deletion",
+          details: dbError.message,
+        });
+      }
+
+      return res.status(200).json({
+        success: true,
+        message: "User deleted successfully",
+      });
     } else {
       return res.status(405).json({ error: "Method not allowed" });
     }

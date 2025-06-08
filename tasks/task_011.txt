@@ -17,7 +17,7 @@ Test onboarding, template creation, and pagination with large datasets.
 ### Details:
 Create onboarding screens and help content for MetaMask.
 
-## 11.2. Drag-and-Drop Certificate Generator [pending]
+## 11.2. Drag-and-Drop Certificate Generator [done]
 ### Dependencies: 3.2, 9.4
 ### Description: Allow issuers to create certificate templates with drag-and-drop UI.
 ### Details:

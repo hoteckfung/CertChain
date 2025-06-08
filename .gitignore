@@ -38,10 +38,13 @@ certchain/cache-zk/
 logs
 *.log
 dev-debug.log
+
 # Dependency directories
 node_modules/
+
 # Environment variables
 .env
+
 # Editor directories and files
 .idea
 .vscode

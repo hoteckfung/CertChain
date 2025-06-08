@@ -1,6 +1,6 @@
 # Task ID: 1
 # Title: Implement Authentication and Access Control
-# Status: pending
+# Status: done
 # Dependencies: None
 # Priority: high
 # Description: Set up MetaMask wallet authentication and role-based access control for Admin, Issuer, and Holder. Public access for Verifier.
