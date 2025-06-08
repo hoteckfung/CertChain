@@ -8,7 +8,12 @@ import Verification from "../components/Verification";
 import CTA from "../components/CTA";
 import Footer from "../components/Footer";
 import { useRouter } from "next/router";
-import { setUserRole, setWalletAddress, setUserId, ROLES } from "../utils/auth";
+import {
+  setUserRole,
+  setWalletAddress,
+  setUserId,
+  ROLES,
+} from "../lib/auth-client";
 
 // Import shadcn components with relative paths
 import { Button } from "../components/ui/button";

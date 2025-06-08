@@ -4,6 +4,7 @@ import React, {
   useState,
   useEffect,
   useRef,
+  useCallback,
 } from "react";
 import { useRouter } from "next/router";
 import {
@@ -12,30 +13,150 @@ import {
   handleAccountChange,
   handleChainChange,
 } from "../utils/wallet";
-import mysql from "../utils/mysql";
 
-// Manages user authentication state
-// Handles role-based redirects
-// Provides login/logout functions
-// Persists user session
-
-// Create the authentication context
+// Enhanced AuthContext with real-time role verification and caching
 const AuthContext = createContext();
 
 // Public routes that don't require authentication
 const publicRoutes = ["/verify", "/", "/login"];
 
+// Role-based route access
+const roleRoutes = {
+  admin: ["/admin", "/issuer", "/holder"],
+  issuer: ["/issuer", "/holder"],
+  holder: ["/holder"],
+};
+
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [roleVerificationCache, setRoleVerificationCache] = useState(null);
+  const [lastVerification, setLastVerification] = useState(null);
   const router = useRouter();
 
-  // Use refs to track event listeners
+  // Use refs to track event listeners and intervals
   const accountChangeListenerRef = useRef(null);
   const chainChangeListenerRef = useRef(null);
+  const roleVerificationIntervalRef = useRef(null);
 
-  // Check if user is authenticated on initial load
+  // Role verification with caching (every 5 minutes)
+  const verifyUserRole = useCallback(
+    async (force = false) => {
+      if (!user?.walletAddress) return null;
+
+      const now = Date.now();
+      const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
+
+      // Use cached data if still valid and not forced
+      if (
+        !force &&
+        roleVerificationCache &&
+        lastVerification &&
+        now - lastVerification < CACHE_DURATION
+      ) {
+        return roleVerificationCache;
+      }
+
+      try {
+        const response = await fetch("/api/auth/verify-role", {
+          method: "GET",
+          credentials: "include",
+        });
+
+        if (!response.ok) {
+          throw new Error("Role verification failed");
+        }
+
+        const data = await response.json();
+
+        if (data.authenticated) {
+          setRoleVerificationCache(data);
+          setLastVerification(now);
+
+          // Update user data if role has changed
+          if (user && data.user.role !== user.role) {
+            console.log("Role change detected, updating user data");
+            setUser((prev) => ({
+              ...prev,
+              ...data.user,
+            }));
+
+            // Redirect to appropriate route for new role
+            const newRoleRoute = data.redirectTo;
+            if (newRoleRoute && router.pathname !== newRoleRoute) {
+              router.push(newRoleRoute);
+            }
+          }
+
+          return data;
+        } else {
+          // User is no longer authenticated
+          setUser(null);
+          setRoleVerificationCache(null);
+          setLastVerification(null);
+
+          if (!publicRoutes.includes(router.pathname)) {
+            router.push("/login");
+          }
+          return null;
+        }
+      } catch (error) {
+        console.error("Role verification error:", error);
+        return roleVerificationCache; // Return cached data on error
+      }
+    },
+    [user, roleVerificationCache, lastVerification, router]
+  );
+
+  // Simplified user data loading - just try login API
+  const loadUserData = useCallback(async (address) => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      const response = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ walletAddress: address }),
+        credentials: "include",
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success && data.user) {
+          setUser({
+            ...data.user,
+            walletAddress: address,
+          });
+        } else {
+          setUser(null);
+          setError(data.error || "Authentication failed");
+        }
+      } else {
+        setUser(null);
+        setError("Login failed");
+      }
+    } catch (err) {
+      console.error("Error loading user data:", err);
+      setError(err.message);
+      setUser(null);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  // Check if user can access current route
+  const canAccessRoute = useCallback((userRole, pathname) => {
+    if (publicRoutes.includes(pathname)) return true;
+
+    const allowedRoutes = roleRoutes[userRole] || [];
+    return allowedRoutes.some((route) => pathname.startsWith(route));
+  }, []);
+
+  // Initial authentication check
   useEffect(() => {
     async function checkAuth() {
       try {
@@ -57,13 +178,28 @@ export function AuthProvider({ children }) {
     }
 
     checkAuth();
-  }, []);
+  }, [loadUserData]);
 
-  // Setup wallet event listeners
+  // Disabled periodic role verification to prevent loops
+  // TODO: Re-enable once authentication is stable
+  // useEffect(() => {
+  //   if (user?.walletAddress) {
+  //     roleVerificationIntervalRef.current = setInterval(() => {
+  //       verifyUserRole(false);
+  //     }, 5 * 60 * 1000);
+
+  //     return () => {
+  //       if (roleVerificationIntervalRef.current) {
+  //         clearInterval(roleVerificationIntervalRef.current);
+  //       }
+  //     };
+  //   }
+  // }, [user, verifyUserRole]);
+
+  // Enhanced wallet event listeners
   useEffect(() => {
-    // Remove any existing listeners first to prevent duplicates
     if (window.ethereum) {
-      // Remove previous listeners if they exist
+      // Remove previous listeners
       if (accountChangeListenerRef.current) {
         window.ethereum.removeListener(
           "accountsChanged",
@@ -78,35 +214,39 @@ export function AuthProvider({ children }) {
         );
       }
 
-      // Create new listeners
+      // Enhanced account change handler
       const handleAccountsChanged = async (accounts) => {
         if (accounts.length === 0) {
           // User disconnected wallet
           setUser(null);
+          setRoleVerificationCache(null);
+          setLastVerification(null);
+
           if (!publicRoutes.includes(router.pathname)) {
             router.push("/login");
           }
         } else {
-          // User switched accounts
+          // User switched accounts - force role verification
           await loadUserData(accounts[0]);
         }
       };
 
       const handleChainChanged = () => {
-        // Reload the page on chain change
+        // Clear cache and reload
+        setRoleVerificationCache(null);
+        setLastVerification(null);
         window.location.reload();
       };
 
-      // Save references to the listeners
+      // Save references
       accountChangeListenerRef.current = handleAccountsChanged;
       chainChangeListenerRef.current = handleChainChanged;
 
-      // Add the listeners
+      // Add listeners
       window.ethereum.on("accountsChanged", handleAccountsChanged);
       window.ethereum.on("chainChanged", handleChainChanged);
     }
 
-    // Cleanup function
     return () => {
       if (window.ethereum) {
         if (accountChangeListenerRef.current) {
@@ -124,75 +264,33 @@ export function AuthProvider({ children }) {
         }
       }
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [router.pathname]);
+  }, [router.pathname, loadUserData]);
 
-  // Check for restricted routes
+  // Simplified route protection - only redirect to login if not authenticated
   useEffect(() => {
     if (loading) return;
 
     const isPublicRoute = publicRoutes.includes(router.pathname);
 
+    // Only redirect to login if user is not authenticated and trying to access protected route
     if (!user && !isPublicRoute) {
-      // Redirect to login if accessing restricted route without authentication
       router.push("/login");
-    } else if (user) {
-      // Redirect based on user role
-      const { role } = user;
-
-      if (router.pathname === "/admin" && role !== "admin") {
-        router.push(`/${role}`);
-      } else if (
-        router.pathname === "/issuer" &&
-        role !== "issuer" &&
-        role !== "admin"
-      ) {
-        router.push(`/${role}`);
-      } else if (
-        router.pathname === "/holder" &&
-        role !== "holder" &&
-        role !== "admin" &&
-        role !== "issuer"
-      ) {
-        router.push("/");
-      }
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // Don't automatically redirect authenticated users - let them navigate manually
   }, [user, loading, router.pathname]);
 
-  // Load user data from database
-  const loadUserData = async (address) => {
-    try {
-      const { data: userData, error } = await mysql.getUserByWalletAddress(
-        address
-      );
-
-      if (error) {
-        throw new Error("Failed to load user data");
-      }
-
-      if (userData) {
-        setUser({
-          ...userData,
-          walletAddress: address,
-        });
-      } else {
-        setUser(null);
-      }
-    } catch (err) {
-      console.error("Error loading user data:", err);
-      setError(err.message);
-      setUser(null);
-    }
-  };
-
-  // Connect wallet
+  // Enhanced login with better error handling
   const login = async () => {
     try {
       setLoading(true);
       setError(null);
 
       const { address } = await connectWallet();
+
+      // Clear any existing cache
+      setRoleVerificationCache(null);
+      setLastVerification(null);
+
       await loadUserData(address);
 
       return { success: true, address };
@@ -205,32 +303,58 @@ export function AuthProvider({ children }) {
     }
   };
 
-  // Disconnect wallet (for UI purposes only, actual disconnection happens in MetaMask)
-  const logout = () => {
+  // Enhanced logout with cache clearing
+  const logout = async () => {
+    try {
+      // Call logout API
+      await fetch("/api/auth/logout", {
+        method: "POST",
+        credentials: "include",
+      });
+    } catch (error) {
+      console.error("Logout API error:", error);
+    }
+
+    // Clear all state and cache
     setUser(null);
-    router.push("/");
+    setRoleVerificationCache(null);
+    setLastVerification(null);
+    setError(null);
+
+    // Clear any intervals
+    if (roleVerificationIntervalRef.current) {
+      clearInterval(roleVerificationIntervalRef.current);
+    }
+
+    // Redirect to login
+    router.push("/login");
   };
 
-  // Value object to be provided to consumers
+  // Force role refresh (for after admin changes)
+  const refreshUserRole = useCallback(async () => {
+    if (user?.walletAddress) {
+      await verifyUserRole(true);
+    }
+  }, [user, verifyUserRole]);
+
   const value = {
     user,
     loading,
     error,
     login,
     logout,
-    isAuthenticated: !!user,
+    refreshUserRole,
+    canAccessRoute,
+    roleVerification: roleVerificationCache,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
-// Custom hook for using the auth context
 export function useAuth() {
   const context = useContext(AuthContext);
-  if (!context) {
+  if (context === undefined) {
     throw new Error("useAuth must be used within an AuthProvider");
   }
   return context;
 }
-
-export default AuthContext;

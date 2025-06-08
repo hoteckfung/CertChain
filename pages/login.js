@@ -14,9 +14,8 @@ import {
   CardTitle,
 } from "../components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "../components/ui/alert";
-import { isMetaMaskInstalled } from "../utils/auth";
+import { isMetaMaskInstalled } from "../lib/auth-client";
 import MetaMaskIcon from "../components/MetaMaskIcon";
-import mysql from "../utils/mysql";
 import { AlertTriangle, Loader2, Info } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
 
@@ -28,10 +27,10 @@ export default function Login() {
   const [dbStatus, setDbStatus] = useState(null);
   const [hasMetaMask, setHasMetaMask] = useState(true);
 
-  // Redirect if already logged in
+  // Redirect if already logged in (but only if user object is complete)
   useEffect(() => {
-    if (user && !loading) {
-      // Redirect based on role
+    if (user && !loading && user.walletAddress && user.role) {
+      // Only redirect if we have a complete user object
       switch (user.role) {
         case "admin":
           router.push("/admin");
@@ -57,31 +56,37 @@ export default function Login() {
   useEffect(() => {
     const checkConnection = async () => {
       try {
-        const { connected, error } = await mysql.checkConnection();
+        const response = await fetch("/api/db-test");
 
-        if (connected) {
+        // Check if response is ok and is JSON
+        if (!response.ok) {
+          setDbStatus("error");
+          console.error("Database test API returned error:", response.status);
+          return;
+        }
+
+        const contentType = response.headers.get("content-type");
+        if (!contentType || !contentType.includes("application/json")) {
+          setDbStatus("error");
+          console.error("Database test API returned non-JSON response");
+          return;
+        }
+
+        const data = await response.json();
+
+        if (data.status === "success") {
           setDbStatus("connected");
         } else {
           setDbStatus("error");
-          console.error("MySQL connection error:", error);
+          console.error("Database connection error:", data.error);
         }
       } catch (error) {
         setDbStatus("error");
-        console.error("Connection error:", error);
+        console.error("Connection check error:", error);
       }
     };
 
-    // Only check if we have credentials
-    if (
-      process.env.MYSQL_HOST &&
-      process.env.MYSQL_USER &&
-      process.env.MYSQL_PASSWORD &&
-      process.env.MYSQL_DATABASE
-    ) {
-      checkConnection();
-    } else {
-      setDbStatus("missing");
-    }
+    checkConnection();
   }, []);
 
   const handleConnectWallet = async () => {

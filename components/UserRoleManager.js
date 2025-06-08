@@ -25,10 +25,18 @@ import {
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Alert, AlertDescription } from "./ui/alert";
-import { getAllUsers, updateUserRole, ROLES } from "../utils/auth";
-import { Loader2, CheckCircle2, AlertCircle, Search } from "lucide-react";
+import { ROLES } from "../lib/auth-client";
+import { useAuth } from "../contexts/AuthContext";
+import {
+  Loader2,
+  CheckCircle2,
+  AlertCircle,
+  Search,
+  RefreshCw,
+} from "lucide-react";
 
 const UserRoleManager = () => {
+  const { refreshUserRole } = useAuth();
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -36,6 +44,7 @@ const UserRoleManager = () => {
   const [roleFilter, setRoleFilter] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
   const [updatingUserId, setUpdatingUserId] = useState(null);
+  const [lastUpdated, setLastUpdated] = useState(null);
 
   // Hardcoded admin address for special handling
   const adminAddress =
@@ -50,8 +59,24 @@ const UserRoleManager = () => {
     setLoading(true);
     setError("");
     try {
-      const usersData = await getAllUsers(roleFilter || null);
-      setUsers(usersData || []); // Ensure we always have an array
+      const response = await fetch("/api/admin/users", {
+        credentials: "include",
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      let usersData = data.users || [];
+
+      // Filter by role if specified
+      if (roleFilter) {
+        usersData = usersData.filter((user) => user.role === roleFilter);
+      }
+
+      setUsers(usersData);
+      setLastUpdated(new Date());
     } catch (err) {
       console.error("Failed to load users:", err);
 
@@ -79,7 +104,21 @@ const UserRoleManager = () => {
     setUpdatingUserId(userId);
 
     try {
-      await updateUserRole(userId, newRole);
+      const response = await fetch("/api/admin/users", {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        credentials: "include",
+        body: JSON.stringify({ userId, newRole }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(
+          errorData.error || `HTTP ${response.status}: ${response.statusText}`
+        );
+      }
 
       // Update the local state
       setUsers(
@@ -89,6 +128,11 @@ const UserRoleManager = () => {
       );
 
       setSuccess(`User role updated successfully to ${newRole}`);
+
+      // Refresh the current user's role if they were the one updated
+      if (refreshUserRole) {
+        await refreshUserRole();
+      }
 
       // Clear success message after 3 seconds
       setTimeout(() => {

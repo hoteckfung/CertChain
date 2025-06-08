@@ -1,7 +1,12 @@
 import "../styles/globals.css";
 import { useRouter } from "next/router";
 import { useEffect, useState } from "react";
-import { getWalletAddress, getUserRole, getUserId, ROLES } from "../utils/auth";
+import {
+  getWalletAddress,
+  getUserRole,
+  getUserId,
+  ROLES,
+} from "../lib/auth-client";
 import { Loader2 } from "lucide-react";
 import { AuthProvider } from "../contexts/AuthContext";
 

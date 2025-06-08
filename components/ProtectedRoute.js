@@ -3,10 +3,9 @@ import { useRouter } from "next/router";
 import {
   getUserRole,
   getWalletAddress,
-  checkUserRoleFromDatabase,
   clearAuth,
   ROLES,
-} from "../utils/auth";
+} from "../lib/auth-client";
 import { Card, CardContent } from "./ui/card";
 import { Loader2, ShieldAlert } from "lucide-react";
 import { Button } from "./ui/button";
@@ -47,24 +46,9 @@ const ProtectedRoute = ({ children, allowedRoles }) => {
           }
         }
 
-        // Production mode: Verify role against database (to ensure it's current)
-        try {
-          const userData = await checkUserRoleFromDatabase(walletAddress);
-
-          if (!userData) {
-            // User not found in database
-            clearAuth();
-            setError("User not found. Please log in again.");
-            router.push("/login");
-            return;
-          }
-
-          // Use the role from database (most up-to-date)
-          userRole = userData.role;
-        } catch (dbError) {
-          console.error("Database validation error:", dbError);
-          throw dbError;
-        }
+        // Note: In a clean architecture, role verification should be handled
+        // by the AuthContext or via API calls, not direct database access from components
+        // For now, we'll rely on localStorage and let the AuthContext handle database sync
 
         // Check if user has one of the allowed roles
         if (allowedRoles.includes(userRole)) {

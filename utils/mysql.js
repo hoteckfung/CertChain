@@ -3,6 +3,7 @@ import mysql from "mysql2/promise";
 // Create a connection pool
 const pool = mysql.createPool({
   host: process.env.MYSQL_HOST || "localhost",
+  port: process.env.MYSQL_PORT || 3306,
   user: process.env.MYSQL_USER || "root",
   password: process.env.MYSQL_PASSWORD || "mysql",
   database: process.env.MYSQL_DATABASE || "certchain",
@@ -34,15 +35,25 @@ export async function getUserByWalletAddress(walletAddress) {
 }
 
 export async function createUser(userData) {
+  const {
+    wallet_address,
+    role,
+    username,
+    email = null,
+    permissions = null,
+  } = userData;
+
+  const permissionsJson = permissions ? JSON.stringify(permissions) : null;
+
   const { data, error } = await query(
-    "INSERT INTO users (wallet_address, role, username, created_at, last_active) VALUES (?, ?, ?, NOW(), NOW())",
-    [userData.wallet_address.toLowerCase(), userData.role, userData.username]
+    "INSERT INTO users (wallet_address, role, username, email, permissions, created_at, last_active) VALUES (?, ?, ?, ?, ?, NOW(), NOW())",
+    [wallet_address.toLowerCase(), role, username, email, permissionsJson]
   );
 
   if (error) return { data: null, error };
 
   // Return the inserted user
-  return getUserByWalletAddress(userData.wallet_address);
+  return getUserByWalletAddress(wallet_address);
 }
 
 export async function updateUser(userId, userData) {
@@ -94,13 +105,29 @@ export async function updateUserRole(userId, newRole) {
   return { data, error };
 }
 
-// Activity logging
+// Enhanced activity logging with severity and metadata
 export async function logActivity(activity) {
-  const { user_id, action, details, wallet_address } = activity;
+  const {
+    user_id,
+    action,
+    details,
+    wallet_address,
+    severity = "info",
+    ip_address = null,
+    user_agent = null,
+  } = activity;
 
   const { data, error } = await query(
-    "INSERT INTO activity_logs (user_id, action, details, wallet_address, created_at) VALUES (?, ?, ?, ?, NOW())",
-    [user_id, action, details, wallet_address?.toLowerCase()]
+    "INSERT INTO activity_logs (user_id, action, details, wallet_address, severity, ip_address, user_agent, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, NOW())",
+    [
+      user_id,
+      action,
+      details,
+      wallet_address?.toLowerCase(),
+      severity,
+      ip_address,
+      user_agent,
+    ]
   );
 
   return { data, error };

@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import Head from "next/head";
 import { useRouter } from "next/router";
 import ProtectedRoute from "../../components/ProtectedRoute";
-import { ROLES } from "../../utils/auth";
+import { ROLES } from "../../lib/auth-client";
 import {
   Card,
   CardContent,
@@ -10,7 +10,6 @@ import {
   CardHeader,
   CardTitle,
 } from "../../components/ui/card";
-import mysql from "../../utils/mysql";
 import { Loader2 } from "lucide-react";
 
 export default function AdminDatabasePage() {
@@ -21,8 +20,23 @@ export default function AdminDatabasePage() {
   useEffect(() => {
     const checkConnection = async () => {
       try {
-        const { connected, error } = await mysql.checkConnection();
-        setDbStatus(connected ? "connected" : "error");
+        const response = await fetch("/api/db-test");
+
+        if (!response.ok) {
+          setDbStatus("error");
+          console.error("Database test API returned error:", response.status);
+          return;
+        }
+
+        const contentType = response.headers.get("content-type");
+        if (!contentType || !contentType.includes("application/json")) {
+          setDbStatus("error");
+          console.error("Database test API returned non-JSON response");
+          return;
+        }
+
+        const data = await response.json();
+        setDbStatus(data.status === "success" ? "connected" : "error");
       } catch (error) {
         console.error("Error checking connection:", error);
         setDbStatus("error");
@@ -72,11 +86,12 @@ export default function AdminDatabasePage() {
                   <div className="bg-gray-50 p-4 rounded-md border">
                     <h3 className="font-medium mb-2">Connection Details:</h3>
                     <div className="text-sm text-gray-600">
-                      <p>Host: {process.env.MYSQL_HOST || "localhost"}</p>
-                      <p>
-                        Database: {process.env.MYSQL_DATABASE || "certchain"}
+                      <p>Host: localhost</p>
+                      <p>Database: certchain</p>
+                      <p>User: root</p>
+                      <p className="text-xs text-gray-500 mt-2">
+                        (Connection details configured server-side)
                       </p>
-                      <p>User: {process.env.MYSQL_USER || "root"}</p>
                     </div>
                   </div>
                 </CardContent>
