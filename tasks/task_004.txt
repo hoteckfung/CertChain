@@ -11,31 +11,31 @@ Create dashboard for holders to manage certificates, download files, generate QR
 Log in as holder and verify ability to view, download, share, and monitor certificates.
 
 # Subtasks:
-## 4.1. View and Edit Profile Information [pending]
+## 4.1. View and Edit Profile Information [cancel]
 ### Dependencies: None
 ### Description: Allow holders to view and update their profile details.
 ### Details:
 Integrate with MySQL for profile storage and updates.
 
-## 4.2. View All Certificates (with IPFS Hash) [pending]
+## 4.2. View All Certificates (with IPFS Hash) [done]
 ### Dependencies: 3.4
 ### Description: Display all certificates issued to the holder, including IPFS hashes.
 ### Details:
 Query blockchain for certificate metadata. Show in dashboard.
 
-## 4.3. Download Certificates (PDF, JPEG, PNG) [pending]
+## 4.3. Download Certificates (PDF, JPEG, PNG) [done]
 ### Dependencies: 4.2
 ### Description: Enable holders to download certificates in multiple formats.
 ### Details:
 Provide download links for each format. Use public IPFS gateways.
 
-## 4.4. Generate QR Codes for Sharing [pending]
+## 4.4. Generate QR Codes for Sharing [done]
 ### Dependencies: 4.2
 ### Description: Generate QR codes for each certificate, linking to verification page.
 ### Details:
 Create QR code generator. Link to /verify route with IPFS hash.
 
-## 4.5. Share Certificates via IPFS Links [pending]
+## 4.5. Share Certificates via IPFS Links [done]
 ### Dependencies: 4.2
 ### Description: Allow holders to share certificates using IPFS links.
 ### Details:

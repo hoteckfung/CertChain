@@ -67,12 +67,15 @@ const Notification = ({ show, type = "info", message, onClose }) => {
         show ? "translate-y-0 opacity-100" : "-translate-y-4 opacity-0"
       }`}>
       <div
-        className={`max-w-md w-full shadow-lg rounded-lg pointer-events-auto flex ring-1 ring-black ring-opacity-5 ${styles.bg} border-l-4 ${styles.border}`}>
-        <div className="flex-1 w-0 p-4">
+        className={`min-w-80 max-w-96 w-auto shadow-lg rounded-lg pointer-events-auto flex ring-1 ring-black ring-opacity-5 ${styles.bg} border-l-4 ${styles.border}`}>
+        <div className="flex-1 p-4">
           <div className="flex items-start">
             <div className="flex-shrink-0">{styles.icon}</div>
-            <div className="ml-3 flex-1">
-              <p className={`text-sm font-medium ${styles.text}`}>{message}</p>
+            <div className="ml-3 flex-1 min-w-0">
+              <p
+                className={`text-sm font-medium ${styles.text} break-words leading-relaxed`}>
+                {message}
+              </p>
             </div>
           </div>
         </div>

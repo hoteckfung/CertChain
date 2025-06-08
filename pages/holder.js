@@ -5,7 +5,8 @@ import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
 import Button from "../components/Button";
 import { getIPFSUrl, isValidIPFSHash } from "../utils/ipfs";
-import QRCode from "qrcode.react";
+import { QRCodeSVG as QRCode } from "qrcode.react";
+import jsPDF from "jspdf";
 import useNotification from "../utils/useNotification";
 import Notification from "../components/Notification";
 import { getHolderCertificates } from "../utils/dataOperations";
@@ -22,15 +23,7 @@ export default function HolderPage() {
     showWarning,
   } = useNotification();
 
-  // User profile states
   const [activeTab, setActiveTab] = useState("certificates");
-  const [isEditingProfile, setIsEditingProfile] = useState(false);
-  const [profileName, setProfileName] = useState("John Doe");
-  const [profileEmail, setProfileEmail] = useState("john.doe@example.com");
-  const [profileWallet, setProfileWallet] = useState(
-    "0xD8f24D419153E5D03d614c5155f900f4B5C8A65a"
-  );
-  const [profilePhone, setProfilePhone] = useState("+1 (555) 123-4567");
 
   // Certificate states
   const [certificates, setCertificates] = useState([]);
@@ -39,6 +32,9 @@ export default function HolderPage() {
   const [downloadFormat, setDownloadFormat] = useState("pdf");
   const [isDownloading, setIsDownloading] = useState(false);
   const [filter, setFilter] = useState("all");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [showCopiedMessage, setShowCopiedMessage] = useState(false);
+  const [showQRSection, setShowQRSection] = useState(false);
 
   // Load sample certificates (would be loaded from blockchain/API in production)
   useEffect(() => {
@@ -62,31 +58,230 @@ export default function HolderPage() {
     setSelectedCertificate(null);
   };
 
-  // Save profile changes
-  const saveProfileChanges = () => {
-    // In a real app, would save to an API/database
-    setIsEditingProfile(false);
-    showSuccess("Profile updated successfully!");
-  };
-
-  // Handle certificate download
-  const handleDownload = (cert, format) => {
+  // Handle certificate download with format conversion
+  const handleDownload = async (cert, requestedFormat) => {
     setIsDownloading(true);
 
-    // Simulate download process
-    setTimeout(() => {
-      // In production would use IPFS URL to fetch and download the file
+    try {
       const url = getIPFSUrl(cert.hash, true);
-      console.log(`Downloading certificate in ${format} format from: ${url}`);
 
-      // Show notification for download completion
-      showSuccess(
-        `Certificate "${
-          cert.title
-        }" downloaded in ${format.toUpperCase()} format`
-      );
+      // Fetch the file from IPFS
+      const response = await fetch(url);
+      if (!response.ok) {
+        throw new Error("Failed to fetch certificate from IPFS");
+      }
+
+      const contentType = response.headers.get("content-type") || "";
+      const blob = await response.blob();
+
+      // If the original format matches the requested format, download directly
+      if (
+        (requestedFormat === "pdf" &&
+          contentType.includes("application/pdf")) ||
+        (requestedFormat === "jpg" &&
+          (contentType.includes("image/jpeg") ||
+            contentType.includes("image/jpg"))) ||
+        (requestedFormat === "png" && contentType.includes("image/png"))
+      ) {
+        // Direct download without conversion
+        downloadBlob(
+          blob,
+          `certificate-${cert.title.replace(/[^a-zA-Z0-9]/g, "_")}-${
+            cert.id
+          }.${requestedFormat}`
+        );
+        showSuccess(
+          `Certificate "${
+            cert.title
+          }" downloaded as ${requestedFormat.toUpperCase()} file!`
+        );
+        return;
+      }
+
+      // Handle format conversion
+      if (
+        contentType.includes("image/") &&
+        (requestedFormat === "jpg" || requestedFormat === "png")
+      ) {
+        // Convert between image formats
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement("canvas");
+          const ctx = canvas.getContext("2d");
+
+          canvas.width = img.width;
+          canvas.height = img.height;
+
+          // Set background color for JPG (since JPG doesn't support transparency)
+          if (requestedFormat === "jpg") {
+            ctx.fillStyle = "white";
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+          }
+
+          ctx.drawImage(img, 0, 0);
+
+          // Convert to blob and download
+          canvas.toBlob(
+            (convertedBlob) => {
+              downloadBlob(
+                convertedBlob,
+                `certificate-${cert.title.replace(/[^a-zA-Z0-9]/g, "_")}-${
+                  cert.id
+                }.${requestedFormat}`
+              );
+              showSuccess(
+                `Certificate "${
+                  cert.title
+                }" converted and downloaded as ${requestedFormat.toUpperCase()} file!`
+              );
+            },
+            `image/${requestedFormat === "jpg" ? "jpeg" : requestedFormat}`,
+            0.95
+          );
+        };
+
+        img.onerror = () => {
+          throw new Error(
+            `Failed to load image for conversion to ${requestedFormat.toUpperCase()}`
+          );
+        };
+
+        img.src = URL.createObjectURL(blob);
+      } else if (contentType.includes("image/") && requestedFormat === "pdf") {
+        // Convert image to PDF using jsPDF
+        const img = new Image();
+        img.onload = () => {
+          try {
+            // Create a new jsPDF instance
+            const pdf = new jsPDF({
+              orientation: "portrait",
+              unit: "mm",
+              format: "a4",
+            });
+
+            // Get A4 dimensions in mm
+            const pageWidth = pdf.internal.pageSize.getWidth();
+            const pageHeight = pdf.internal.pageSize.getHeight();
+
+            // Calculate image dimensions to fit the page with margins
+            const margin = 20; // 20mm margin
+            const maxWidth = pageWidth - margin * 2;
+            const maxHeight = pageHeight - margin * 2;
+
+            // Calculate scaling to fit image on page
+            let imgWidth = img.width * 0.264583; // Convert pixels to mm (96 DPI)
+            let imgHeight = img.height * 0.264583;
+
+            if (imgWidth > maxWidth || imgHeight > maxHeight) {
+              const scale = Math.min(
+                maxWidth / imgWidth,
+                maxHeight / imgHeight
+              );
+              imgWidth *= scale;
+              imgHeight *= scale;
+            }
+
+            // Center the image on the page
+            const x = (pageWidth - imgWidth) / 2;
+            const y = (pageHeight - imgHeight) / 2;
+
+            // Add the image to PDF
+            const canvas = document.createElement("canvas");
+            const ctx = canvas.getContext("2d");
+            canvas.width = img.width;
+            canvas.height = img.height;
+
+            // Draw white background
+            ctx.fillStyle = "white";
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.drawImage(img, 0, 0);
+
+            // Get image data as base64
+            const imgData = canvas.toDataURL("image/jpeg", 0.95);
+
+            // Add image to PDF
+            pdf.addImage(imgData, "JPEG", x, y, imgWidth, imgHeight);
+
+            // Add certificate metadata as text (optional)
+            pdf.setFontSize(10);
+            pdf.setTextColor(128, 128, 128);
+            pdf.text(`Certificate: ${cert.title}`, margin, pageHeight - 15);
+            pdf.text(`Issuer: ${cert.issuer}`, margin, pageHeight - 10);
+            pdf.text(`Issue Date: ${cert.issueDate}`, margin, pageHeight - 5);
+
+            // Generate and download the PDF
+            const pdfBlob = pdf.output("blob");
+            downloadBlob(
+              pdfBlob,
+              `certificate-${cert.title.replace(/[^a-zA-Z0-9]/g, "_")}-${
+                cert.id
+              }.pdf`
+            );
+
+            showSuccess(
+              `Certificate "${cert.title}" converted and downloaded as PDF file!`
+            );
+          } catch (error) {
+            console.error("PDF conversion error:", error);
+            // Fallback to original file with PDF extension
+            downloadBlob(
+              blob,
+              `certificate-${cert.title.replace(/[^a-zA-Z0-9]/g, "_")}-${
+                cert.id
+              }.pdf`
+            );
+            showSuccess(
+              `Certificate "${cert.title}" downloaded with PDF extension!`
+            );
+          }
+        };
+
+        img.onerror = () => {
+          // Fallback to original file with PDF extension
+          downloadBlob(
+            blob,
+            `certificate-${cert.title.replace(/[^a-zA-Z0-9]/g, "_")}-${
+              cert.id
+            }.pdf`
+          );
+          showSuccess(
+            `Certificate "${cert.title}" downloaded with PDF extension!`
+          );
+        };
+
+        img.src = URL.createObjectURL(blob);
+      } else {
+        // Fallback: download with requested extension but original format
+        downloadBlob(
+          blob,
+          `certificate-${cert.title.replace(/[^a-zA-Z0-9]/g, "_")}-${
+            cert.id
+          }.${requestedFormat}`
+        );
+        showSuccess(
+          `Certificate "${
+            cert.title
+          }" downloaded with ${requestedFormat.toUpperCase()} extension!`
+        );
+      }
+    } catch (error) {
+      console.error("Download error:", error);
+      showError(`Failed to download certificate: ${error.message}`);
+    } finally {
       setIsDownloading(false);
-    }, 1500);
+    }
+  };
+
+  // Helper function to download blob
+  const downloadBlob = (blob, filename) => {
+    const downloadUrl = window.URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = downloadUrl;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(downloadUrl);
   };
 
   // Generate share link
@@ -95,10 +290,47 @@ export default function HolderPage() {
     return `${baseUrl}/verify?hash=${cert.hash}`;
   };
 
-  // Filter certificates based on status
+  // Copy text to clipboard
+  const copyToClipboard = async (text) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setShowCopiedMessage(true);
+      setTimeout(() => setShowCopiedMessage(false), 2000);
+    } catch (err) {
+      console.error("Failed to copy: ", err);
+      // Fallback for older browsers
+      const textArea = document.createElement("textarea");
+      textArea.value = text;
+      document.body.appendChild(textArea);
+      textArea.focus();
+      textArea.select();
+      try {
+        document.execCommand("copy");
+        setShowCopiedMessage(true);
+        setTimeout(() => setShowCopiedMessage(false), 2000);
+      } catch (fallbackErr) {
+        console.error("Fallback copy failed: ", fallbackErr);
+      }
+      document.body.removeChild(textArea);
+    }
+  };
+
+  // Filter certificates based on status and search query
   const filteredCertificates = certificates.filter((cert) => {
-    if (filter === "all") return true;
-    return cert.status.toLowerCase() === filter.toLowerCase();
+    // Filter by status
+    const statusMatch =
+      filter === "all" || cert.status.toLowerCase() === filter.toLowerCase();
+
+    // Filter by search query (search in title, issuer, type, and description)
+    const searchMatch =
+      searchQuery === "" ||
+      cert.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      cert.issuer.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      cert.type.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (cert.description &&
+        cert.description.toLowerCase().includes(searchQuery.toLowerCase()));
+
+    return statusMatch && searchMatch;
   });
 
   return (
@@ -145,15 +377,6 @@ export default function HolderPage() {
                   }`}>
                   My Certificates
                 </button>
-                <button
-                  onClick={() => setActiveTab("profile")}
-                  className={`px-6 py-3 font-medium ${
-                    activeTab === "profile"
-                      ? "text-primary-blue border-b-2 border-primary-blue"
-                      : "text-gray-500"
-                  }`}>
-                  Profile
-                </button>
               </div>
             </div>
 
@@ -161,24 +384,71 @@ export default function HolderPage() {
             {activeTab === "certificates" && (
               <div className="grid grid-cols-1 gap-8">
                 <div className="bg-white rounded-lg shadow-sm p-6">
-                  <div className="flex justify-between items-center mb-6">
+                  <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center mb-6 gap-4">
                     <h2 className="text-xl font-semibold">
                       Certificate Portfolio
                     </h2>
-                    <div className="flex items-center">
-                      <span className="text-sm text-gray-500 mr-2">
-                        Filter:
-                      </span>
-                      <select
-                        className="p-2 border border-gray-300 rounded-md text-sm"
-                        value={filter}
-                        onChange={(e) => setFilter(e.target.value)}>
-                        <option value="all">All Certificates</option>
-                        <option value="issued">Issued</option>
-                        <option value="verified">Verified</option>
-                        <option value="pending">Pending</option>
-                        <option value="rejected">Rejected</option>
-                      </select>
+                    <div className="flex flex-col sm:flex-row gap-3">
+                      {/* Search Input */}
+                      <div className="relative">
+                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                          <svg
+                            className="h-4 w-4 text-gray-400"
+                            xmlns="http://www.w3.org/2000/svg"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                            stroke="currentColor">
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+                            />
+                          </svg>
+                        </div>
+                        <input
+                          type="text"
+                          placeholder="Search certificates..."
+                          className="pl-10 pr-4 py-2 border border-gray-300 rounded-md text-sm w-full sm:w-64 focus:outline-none focus:ring-2 focus:ring-primary-blue focus:border-transparent"
+                          value={searchQuery}
+                          onChange={(e) => setSearchQuery(e.target.value)}
+                        />
+                        {searchQuery && (
+                          <button
+                            onClick={() => setSearchQuery("")}
+                            className="absolute inset-y-0 right-0 pr-3 flex items-center">
+                            <svg
+                              className="h-4 w-4 text-gray-400 hover:text-gray-600"
+                              xmlns="http://www.w3.org/2000/svg"
+                              fill="none"
+                              viewBox="0 0 24 24"
+                              stroke="currentColor">
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth={2}
+                                d="M6 18L18 6M6 6l12 12"
+                              />
+                            </svg>
+                          </button>
+                        )}
+                      </div>
+                      {/* Status Filter */}
+                      <div className="flex items-center">
+                        <span className="text-sm text-gray-500 mr-2">
+                          Filter:
+                        </span>
+                        <select
+                          className="p-2 border border-gray-300 rounded-md text-sm"
+                          value={filter}
+                          onChange={(e) => setFilter(e.target.value)}>
+                          <option value="all">All Certificates</option>
+                          <option value="issued">Issued</option>
+                          <option value="verified">Verified</option>
+                          <option value="pending">Pending</option>
+                          <option value="rejected">Rejected</option>
+                        </select>
+                      </div>
                     </div>
                   </div>
 
@@ -200,7 +470,9 @@ export default function HolderPage() {
                       <p className="text-gray-500">
                         {certificates.length === 0
                           ? "Loading your certificates..."
-                          : "No certificates match the selected filter."}
+                          : searchQuery || filter !== "all"
+                          ? "No certificates match your search criteria."
+                          : "No certificates found."}
                       </p>
                     </div>
                   ) : (
@@ -240,44 +512,12 @@ export default function HolderPage() {
                               {cert.type}
                             </p>
                           </div>
-                          <div className="border-t border-gray-200 pt-4 flex justify-between">
-                            <div className="space-x-2">
-                              <button
-                                onClick={() => viewCertificate(cert)}
-                                className="px-3 py-1 bg-primary-blue text-white text-sm rounded-md hover:bg-blue-700 transition-colors">
-                                View
-                              </button>
-                              <button
-                                onClick={() => {
-                                  setSelectedCertificate(cert);
-                                  setShareModalOpen(true);
-                                }}
-                                className="px-3 py-1 bg-gray-100 text-gray-700 text-sm rounded-md hover:bg-gray-200 transition-colors">
-                                Share
-                              </button>
-                            </div>
-                            <div className="relative">
-                              <select
-                                className="px-3 py-1 bg-gray-100 text-gray-700 text-sm rounded-md hover:bg-gray-200 transition-colors appearance-none pr-8"
-                                value={downloadFormat}
-                                onChange={(e) =>
-                                  setDownloadFormat(e.target.value)
-                                }
-                                onClick={(e) => e.stopPropagation()}>
-                                <option value="pdf">PDF</option>
-                                <option value="jpg">JPG</option>
-                                <option value="png">PNG</option>
-                                <option value="qr">QR Code</option>
-                              </select>
-                              <button
-                                onClick={() =>
-                                  handleDownload(cert, downloadFormat)
-                                }
-                                disabled={isDownloading}
-                                className="ml-2 px-3 py-1 bg-green-600 text-white text-sm rounded-md hover:bg-green-700 transition-colors">
-                                Download
-                              </button>
-                            </div>
+                          <div className="border-t border-gray-200 pt-4 flex justify-center">
+                            <button
+                              onClick={() => viewCertificate(cert)}
+                              className="px-4 py-2 bg-primary-blue text-white text-sm rounded-md hover:bg-blue-700 transition-colors">
+                              View
+                            </button>
                           </div>
                         </div>
                       ))}
@@ -384,211 +624,13 @@ export default function HolderPage() {
                 </div>
               </div>
             )}
-
-            {/* Profile Tab */}
-            {activeTab === "profile" && (
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-                <div className="md:col-span-2">
-                  <div className="bg-white rounded-lg shadow-sm p-6">
-                    <div className="flex justify-between items-center mb-6">
-                      <h2 className="text-xl font-semibold">
-                        Personal Profile
-                      </h2>
-                      <Button
-                        onClick={() => setIsEditingProfile(!isEditingProfile)}
-                        variant={isEditingProfile ? "secondary" : "primary"}>
-                        {isEditingProfile ? "Cancel" : "Edit Profile"}
-                      </Button>
-                    </div>
-
-                    <div className="border-b border-gray-200 pb-6 mb-6">
-                      <h3 className="text-lg font-medium mb-4">
-                        Account Information
-                      </h3>
-                      {isEditingProfile ? (
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          <div>
-                            <label
-                              htmlFor="fullName"
-                              className="block text-sm font-medium text-gray-700 mb-1">
-                              Full Name
-                            </label>
-                            <input
-                              type="text"
-                              id="fullName"
-                              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-blue"
-                              value={profileName}
-                              onChange={(e) => setProfileName(e.target.value)}
-                            />
-                          </div>
-                          <div>
-                            <label
-                              htmlFor="email"
-                              className="block text-sm font-medium text-gray-700 mb-1">
-                              Email Address
-                            </label>
-                            <input
-                              type="email"
-                              id="email"
-                              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-blue"
-                              value={profileEmail}
-                              onChange={(e) => setProfileEmail(e.target.value)}
-                            />
-                          </div>
-                          <div>
-                            <label
-                              htmlFor="phone"
-                              className="block text-sm font-medium text-gray-700 mb-1">
-                              Phone Number
-                            </label>
-                            <input
-                              type="tel"
-                              id="phone"
-                              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-blue"
-                              value={profilePhone}
-                              onChange={(e) => setProfilePhone(e.target.value)}
-                            />
-                          </div>
-                          <div>
-                            <label
-                              htmlFor="wallet"
-                              className="block text-sm font-medium text-gray-700 mb-1">
-                              Wallet Address
-                            </label>
-                            <input
-                              type="text"
-                              id="wallet"
-                              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-blue bg-gray-100"
-                              value={profileWallet}
-                              disabled
-                            />
-                            <p className="text-xs text-gray-500 mt-1">
-                              Your wallet address cannot be changed
-                            </p>
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          <div>
-                            <p className="text-sm text-gray-500">Full Name</p>
-                            <p className="font-medium">{profileName}</p>
-                          </div>
-                          <div>
-                            <p className="text-sm text-gray-500">
-                              Email Address
-                            </p>
-                            <p className="font-medium">{profileEmail}</p>
-                          </div>
-                          <div>
-                            <p className="text-sm text-gray-500">
-                              Phone Number
-                            </p>
-                            <p className="font-medium">{profilePhone}</p>
-                          </div>
-                          <div>
-                            <p className="text-sm text-gray-500">
-                              Wallet Address
-                            </p>
-                            <p className="font-mono text-sm">{profileWallet}</p>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-
-                    {isEditingProfile && (
-                      <div className="flex justify-end">
-                        <Button onClick={saveProfileChanges}>
-                          Save Changes
-                        </Button>
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                <div className="md:col-span-1">
-                  <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
-                    <h3 className="text-lg font-medium mb-4">Wallet Status</h3>
-                    <div className="flex items-center mb-4">
-                      <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        className="h-5 w-5 text-green-500 mr-2"
-                        viewBox="0 0 20 20"
-                        fill="currentColor">
-                        <path
-                          fillRule="evenodd"
-                          d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
-                          clipRule="evenodd"
-                        />
-                      </svg>
-                      <span>Connected</span>
-                    </div>
-                    <p className="text-sm text-gray-600 mb-4">
-                      Your wallet is securely connected to CertChain and ready
-                      to receive certificates.
-                    </p>
-                    <div className="border-t border-gray-200 pt-4">
-                      <h4 className="font-medium mb-2">Your Certificates</h4>
-                      <div className="flex justify-between text-sm">
-                        <span>Total Certificates</span>
-                        <span className="font-medium">
-                          {certificates.length}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="bg-white rounded-lg shadow-sm p-6">
-                    <h3 className="text-lg font-medium mb-4">
-                      Privacy Settings
-                    </h3>
-                    <div className="space-y-4">
-                      <div className="flex items-center justify-between">
-                        <label htmlFor="publicProfile" className="text-sm">
-                          Public Profile
-                        </label>
-                        <input
-                          type="checkbox"
-                          id="publicProfile"
-                          className="h-4 w-4 text-primary-blue focus:ring-primary-blue border-gray-300 rounded"
-                          defaultChecked
-                        />
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <label htmlFor="showCertificates" className="text-sm">
-                          Show Certificates Publicly
-                        </label>
-                        <input
-                          type="checkbox"
-                          id="showCertificates"
-                          className="h-4 w-4 text-primary-blue focus:ring-primary-blue border-gray-300 rounded"
-                          defaultChecked
-                        />
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <label
-                          htmlFor="receiveNotifications"
-                          className="text-sm">
-                          Receive Email Notifications
-                        </label>
-                        <input
-                          type="checkbox"
-                          id="receiveNotifications"
-                          className="h-4 w-4 text-primary-blue focus:ring-primary-blue border-gray-300 rounded"
-                          defaultChecked
-                        />
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
           </div>
         </main>
 
         {/* Certificate Viewer Modal */}
         {selectedCertificate && !shareModalOpen && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-lg w-full max-w-4xl max-h-[90vh] overflow-y-auto">
+            <div className="bg-white rounded-lg w-full max-w-7xl max-h-[95vh] overflow-y-auto">
               <div className="p-6">
                 <div className="flex justify-between items-center mb-6">
                   <h2 className="text-2xl font-bold text-gray-800">
@@ -614,33 +656,81 @@ export default function HolderPage() {
                 </div>
 
                 {/* Certificate Preview Image */}
-                <div className="mb-6 bg-gray-100 p-4 rounded-md flex items-center justify-center">
-                  <div className="bg-white shadow-md p-8 w-full max-w-2xl aspect-[4/3] flex flex-col items-center justify-center text-center">
-                    <div className="text-primary-blue text-lg mb-2">
-                      {selectedCertificate.issuer}
-                    </div>
-                    <div className="text-gray-400 mb-2">
-                      proudly presents this
-                    </div>
-                    <div className="text-2xl font-bold mb-1">
-                      {selectedCertificate.type.toUpperCase()}
-                    </div>
-                    <div className="text-gray-400 mb-4">to</div>
-                    <div className="text-xl font-medium mb-6">
-                      {profileName}
-                    </div>
-                    <div className="text-gray-600 mb-8">
-                      {selectedCertificate.title}
-                    </div>
-                    <div className="flex justify-between w-full">
-                      <div className="text-sm text-gray-500">
-                        Date: {selectedCertificate.issueDate}
+                <div className="mb-6 bg-gray-100 p-4 rounded-md">
+                  {selectedCertificate.hash &&
+                  isValidIPFSHash(selectedCertificate.hash) ? (
+                    <div className="bg-white rounded-lg overflow-hidden shadow-lg">
+                      <div className="w-full h-[600px] flex items-center justify-center p-4">
+                        <img
+                          src={getIPFSUrl(selectedCertificate.hash, true)}
+                          alt="Certificate Preview"
+                          className="max-w-full max-h-full object-contain rounded shadow-md"
+                          style={{
+                            imageRendering: "high-quality",
+                          }}
+                          onError={(e) => {
+                            // Fallback to generic certificate display if IPFS fails
+                            e.target.style.display = "none";
+                            e.target.nextElementSibling.style.display = "flex";
+                          }}
+                        />
+                        {/* Fallback generic certificate display */}
+                        <div className="hidden bg-white shadow-md p-8 w-full max-w-lg mx-auto flex flex-col items-center justify-center text-center rounded">
+                          <div className="text-primary-blue text-lg mb-2">
+                            {selectedCertificate.issuer}
+                          </div>
+                          <div className="text-gray-400 mb-2">
+                            proudly presents this
+                          </div>
+                          <div className="text-2xl font-bold mb-1">
+                            CERTIFICATE
+                          </div>
+                          <div className="text-gray-400 mb-4">to</div>
+                          <div className="text-xl font-medium mb-6">
+                            {selectedCertificate.metadata?.holderName ||
+                              "Certificate Holder"}
+                          </div>
+                          <div className="text-gray-600 mb-8">
+                            {selectedCertificate.title}
+                          </div>
+                          <div className="flex justify-between w-full">
+                            <div className="text-sm text-gray-500">
+                              Date: {selectedCertificate.issueDate}
+                            </div>
+                            <div className="text-sm text-gray-500">
+                              ID: {selectedCertificate.id}
+                            </div>
+                          </div>
+                        </div>
                       </div>
-                      <div className="text-sm text-gray-500">
-                        ID: {selectedCertificate.id}
+                    </div>
+                  ) : (
+                    <div className="bg-white shadow-md p-8 w-full aspect-[4/3] flex flex-col items-center justify-center text-center">
+                      <div className="text-primary-blue text-lg mb-2">
+                        {selectedCertificate.issuer}
+                      </div>
+                      <div className="text-gray-400 mb-2">
+                        proudly presents this
+                      </div>
+                      <div className="text-2xl font-bold mb-1">CERTIFICATE</div>
+                      <div className="text-gray-400 mb-4">to</div>
+                      <div className="text-xl font-medium mb-6">
+                        {selectedCertificate.metadata?.holderName ||
+                          "Certificate Holder"}
+                      </div>
+                      <div className="text-gray-600 mb-8">
+                        {selectedCertificate.title}
+                      </div>
+                      <div className="flex justify-between w-full">
+                        <div className="text-sm text-gray-500">
+                          Date: {selectedCertificate.issueDate}
+                        </div>
+                        <div className="text-sm text-gray-500">
+                          ID: {selectedCertificate.id}
+                        </div>
                       </div>
                     </div>
-                  </div>
+                  )}
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
@@ -659,12 +749,6 @@ export default function HolderPage() {
                         <p className="text-sm text-gray-500">Issuer</p>
                         <p className="font-medium">
                           {selectedCertificate.issuer}
-                        </p>
-                      </div>
-                      <div className="mb-4">
-                        <p className="text-sm text-gray-500">Type</p>
-                        <p className="font-medium">
-                          {selectedCertificate.type}
                         </p>
                       </div>
                       <div className="mb-4">
@@ -737,7 +821,8 @@ export default function HolderPage() {
                                 "_blank"
                               )
                             }
-                            className="ml-2 text-primary-blue hover:text-blue-700 flex-shrink-0">
+                            className="ml-2 text-primary-blue hover:text-blue-700 flex-shrink-0"
+                            title="View on IPFS">
                             <svg
                               xmlns="http://www.w3.org/2000/svg"
                               className="h-5 w-5"
@@ -747,16 +832,32 @@ export default function HolderPage() {
                               <path d="M5 5a2 2 0 00-2 2v8a2 2 0 002 2h8a2 2 0 002-2v-3a1 1 0 10-2 0v3H5V7h3a1 1 0 000-2H5z" />
                             </svg>
                           </button>
+                          <button
+                            onClick={() =>
+                              copyToClipboard(selectedCertificate.hash)
+                            }
+                            className="ml-2 text-primary-blue hover:text-blue-700 p-1"
+                            title="Copy IPFS hash to clipboard">
+                            <svg
+                              xmlns="http://www.w3.org/2000/svg"
+                              className="h-4 w-4"
+                              fill="none"
+                              viewBox="0 0 24 24"
+                              stroke="currentColor">
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth={2}
+                                d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
+                              />
+                            </svg>
+                          </button>
+                          {showCopiedMessage && (
+                            <span className="ml-2 text-green-600 text-sm">
+                              Copied!
+                            </span>
+                          )}
                         </div>
-                      </div>
-
-                      <div className="mt-4">
-                        <p className="text-sm text-gray-500 mb-1">
-                          Description
-                        </p>
-                        <p className="text-sm">
-                          {selectedCertificate.description}
-                        </p>
                       </div>
 
                       {selectedCertificate.metadata && (
@@ -786,21 +887,12 @@ export default function HolderPage() {
                   <Button variant="secondary" onClick={closeViewer}>
                     Close
                   </Button>
-                  <div className="space-x-2">
-                    <Button
-                      variant="secondary"
-                      onClick={() => {
-                        setShareModalOpen(true);
-                      }}>
-                      Share Certificate
-                    </Button>
-                    <Button
-                      onClick={() =>
-                        handleDownload(selectedCertificate, downloadFormat)
-                      }>
-                      Download Certificate
-                    </Button>
-                  </div>
+                  <Button
+                    onClick={() => {
+                      setShareModalOpen(true);
+                    }}>
+                    Share Certificate
+                  </Button>
                 </div>
               </div>
             </div>
@@ -838,48 +930,202 @@ export default function HolderPage() {
                   </button>
                 </div>
 
-                <p className="mb-4 text-gray-600">
-                  Share your certificate with verifiers using the following link
-                  or QR code:
+                <p className="mb-6 text-gray-600">
+                  Choose how you want to share your certificate:
                 </p>
 
-                <div className="mb-6">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Verification Link
-                  </label>
-                  <div className="flex">
-                    <input
-                      type="text"
-                      className="flex-grow w-full px-3 py-2 border border-gray-300 rounded-l-md bg-gray-50"
-                      value={getShareLink(selectedCertificate)}
-                      readOnly
-                    />
-                    <button
-                      onClick={() => {
-                        navigator.clipboard.writeText(
-                          getShareLink(selectedCertificate)
-                        );
-                        showInfo("Link copied to clipboard!");
-                      }}
-                      className="px-3 py-2 bg-gray-100 text-gray-700 rounded-r-md border border-gray-300 border-l-0 hover:bg-gray-200">
-                      Copy
-                    </button>
-                  </div>
+                {/* Share Format Options */}
+                <div className="grid grid-cols-2 gap-4 mb-6">
+                  <button
+                    onClick={() => handleDownload(selectedCertificate, "pdf")}
+                    className="p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors text-center">
+                    <div className="text-red-500 mb-2">
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        className="h-8 w-8 mx-auto"
+                        fill="currentColor"
+                        viewBox="0 0 24 24">
+                        <path d="M14,2H6A2,2 0 0,0 4,4V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V8L14,2M18,20H6V4H13V9H18V20Z" />
+                      </svg>
+                    </div>
+                    <p className="text-sm font-medium">PDF</p>
+                    <p className="text-xs text-gray-500">Download as PDF</p>
+                  </button>
+
+                  <button
+                    onClick={() => handleDownload(selectedCertificate, "jpg")}
+                    className="p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors text-center">
+                    <div className="text-blue-500 mb-2">
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        className="h-8 w-8 mx-auto"
+                        fill="currentColor"
+                        viewBox="0 0 24 24">
+                        <path d="M8.5,13.5L11,16.5L14.5,12L19,18H5M21,19V5C21,3.89 20.1,3 19,3H5A2,2 0 0,0 3,5V19A2,2 0 0,0 5,21H19A2,2 0 0,0 21,19Z" />
+                      </svg>
+                    </div>
+                    <p className="text-sm font-medium">JPG</p>
+                    <p className="text-xs text-gray-500">Download as JPG</p>
+                  </button>
+
+                  <button
+                    onClick={() => handleDownload(selectedCertificate, "png")}
+                    className="p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors text-center">
+                    <div className="text-green-500 mb-2">
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        className="h-8 w-8 mx-auto"
+                        fill="currentColor"
+                        viewBox="0 0 24 24">
+                        <path d="M8.5,13.5L11,16.5L14.5,12L19,18H5M21,19V5C21,3.89 20.1,3 19,3H5A2,2 0 0,0 3,5V19A2,2 0 0,0 5,21H19A2,2 0 0,0 21,19Z" />
+                      </svg>
+                    </div>
+                    <p className="text-sm font-medium">PNG</p>
+                    <p className="text-xs text-gray-500">Download as PNG</p>
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      // Show QR section
+                      setShowQRSection(true);
+                    }}
+                    className="p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors text-center">
+                    <div className="text-purple-500 mb-2">
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        className="h-8 w-8 mx-auto"
+                        fill="currentColor"
+                        viewBox="0 0 24 24">
+                        <path d="M3,11H5V13H3V11M11,5H13V9H11V5M9,11H13V15H11V13H9V11M15,11H17V13H15V11M19,11H21V13H19V11M12,15H14V17H12V15M3,5H9V9H7V7H5V9H3V5M3,15H9V21H7V19H5V21H3V15M15,5H21V9H19V7H17V9H15V5Z" />
+                      </svg>
+                    </div>
+                    <p className="text-sm font-medium">QR Code</p>
+                    <p className="text-xs text-gray-500">Generate QR Code</p>
+                  </button>
                 </div>
 
-                <div className="mb-6">
-                  <p className="block text-sm font-medium text-gray-700 mb-3">
-                    QR Code
-                  </p>
-                  <div className="flex justify-center p-4 bg-white border border-gray-200 rounded-md">
-                    <QRCode
-                      value={getShareLink(selectedCertificate)}
-                      size={180}
-                      level="H"
-                      includeMargin={true}
-                    />
+                {/* QR Code Section - Hidden by default */}
+                {showQRSection && (
+                  <div className="mb-6">
+                    <div className="flex justify-between items-center mb-3">
+                      <p className="text-sm font-medium text-gray-700">
+                        QR Code & Link
+                      </p>
+                      <button
+                        onClick={() => setShowQRSection(false)}
+                        className="text-gray-400 hover:text-gray-600">
+                        <svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          className="h-5 w-5"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          stroke="currentColor">
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M6 18L18 6M6 6l12 12"
+                          />
+                        </svg>
+                      </button>
+                    </div>
+
+                    <div className="mb-4">
+                      <label className="block text-xs text-gray-500 mb-1">
+                        Verification Link
+                      </label>
+                      <div className="flex">
+                        <input
+                          type="text"
+                          className="flex-grow w-full px-3 py-2 border border-gray-300 rounded-l-md bg-gray-50 text-sm"
+                          value={getShareLink(selectedCertificate)}
+                          readOnly
+                        />
+                        <button
+                          onClick={() => {
+                            navigator.clipboard.writeText(
+                              getShareLink(selectedCertificate)
+                            );
+                            showInfo("Link copied to clipboard!");
+                          }}
+                          className="px-3 py-2 bg-gray-100 text-gray-700 rounded-r-md border border-gray-300 border-l-0 hover:bg-gray-200 text-sm">
+                          Copy
+                        </button>
+                      </div>
+                    </div>
+
+                    <div
+                      id="qr-code"
+                      className="flex justify-center p-4 bg-white border border-gray-200 rounded-md mb-4">
+                      <QRCode
+                        value={getShareLink(selectedCertificate)}
+                        size={180}
+                        level="H"
+                        includeMargin={true}
+                      />
+                    </div>
+
+                    <div className="flex space-x-2">
+                      <Button
+                        variant="secondary"
+                        className="flex-1"
+                        onClick={() => {
+                          const shareText = `Check out my certificate: ${
+                            selectedCertificate.title
+                          } from ${
+                            selectedCertificate.issuer
+                          }. Verify it here: ${getShareLink(
+                            selectedCertificate
+                          )}`;
+
+                          if (navigator.share) {
+                            navigator.share({
+                              title: `Certificate: ${selectedCertificate.title}`,
+                              text: shareText,
+                              url: getShareLink(selectedCertificate),
+                            });
+                          } else {
+                            navigator.clipboard.writeText(shareText);
+                            showSuccess("Share message copied to clipboard!");
+                          }
+                        }}>
+                        Share Link
+                      </Button>
+                      <Button
+                        className="flex-1"
+                        onClick={() => {
+                          const svg = document.querySelector("#qr-code svg");
+                          if (svg) {
+                            const svgData =
+                              new XMLSerializer().serializeToString(svg);
+                            const canvas = document.createElement("canvas");
+                            const ctx = canvas.getContext("2d");
+                            const img = new Image();
+
+                            canvas.width = 200;
+                            canvas.height = 200;
+
+                            img.onload = () => {
+                              ctx.fillStyle = "white";
+                              ctx.fillRect(0, 0, canvas.width, canvas.height);
+                              ctx.drawImage(img, 0, 0);
+
+                              const link = document.createElement("a");
+                              link.download = `certificate-${selectedCertificate.id}-qr.png`;
+                              link.href = canvas.toDataURL("image/png");
+                              link.click();
+                              showSuccess("QR Code downloaded successfully!");
+                            };
+
+                            img.src =
+                              "data:image/svg+xml;base64," + btoa(svgData);
+                          }
+                        }}>
+                        Download QR
+                      </Button>
+                    </div>
                   </div>
-                </div>
+                )}
 
                 <div className="flex justify-between">
                   <Button
@@ -887,17 +1133,9 @@ export default function HolderPage() {
                     onClick={() => {
                       setShareModalOpen(false);
                       setSelectedCertificate(null);
+                      setShowQRSection(false);
                     }}>
                     Close
-                  </Button>
-                  <Button
-                    onClick={() => {
-                      // In a real app, would generate and download the QR code
-                      showSuccess("QR Code downloaded successfully!");
-                      setShareModalOpen(false);
-                      setSelectedCertificate(null);
-                    }}>
-                    Download QR Code
                   </Button>
                 </div>
               </div>

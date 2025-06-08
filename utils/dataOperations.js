@@ -6,6 +6,16 @@
  */
 export async function getHolderCertificates() {
   // In a real app, this would fetch from an API or blockchain
+
+  // Get certificates issued via the issuer interface
+  let issuedCertificates = [];
+  if (typeof window !== "undefined") {
+    const storedCertificates = JSON.parse(
+      localStorage.getItem("issuedCertificates") || "[]"
+    );
+    issuedCertificates = storedCertificates;
+  }
+
   const mockCertificates = [
     {
       id: "cert-001",
@@ -68,7 +78,25 @@ export async function getHolderCertificates() {
   // Simulate network delay
   await new Promise((resolve) => setTimeout(resolve, 600));
 
-  return mockCertificates;
+  // Combine issued certificates with mock certificates
+  // Convert issuer certificate format to holder certificate format
+  const convertedIssuedCerts = issuedCertificates.map((cert) => ({
+    id: cert.id,
+    title: cert.title,
+    issuer: cert.institution || "Unknown Institution",
+    type: cert.type,
+    status: cert.status,
+    issueDate: cert.issueDate,
+    hash: cert.hash,
+    description: cert.details || `Certificate for ${cert.title}`,
+    metadata: {
+      holderAddress: cert.holder,
+      holderName: cert.name,
+    },
+  }));
+
+  // Return combined certificates (issued ones first, then mock ones)
+  return [...convertedIssuedCerts, ...mockCertificates];
 }
 
 /**

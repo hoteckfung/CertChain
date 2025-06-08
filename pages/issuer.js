@@ -4,7 +4,12 @@ import Head from "next/head";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
 import Button from "../components/Button";
-import { uploadToPinata, getIPFSUrl, testAuthentication } from "../utils/ipfs";
+import {
+  uploadToPinata,
+  getIPFSUrl,
+  testAuthentication,
+  getIPFSInfo,
+} from "../utils/ipfs";
 import useNotification from "../utils/useNotification";
 import Notification from "../components/Notification";
 import SignaturePad from "../components/SignaturePad";
@@ -25,14 +30,17 @@ export default function IssuerPage() {
   const [activeTab, setActiveTab] = useState("create");
   const [selectedFile, setSelectedFile] = useState(null);
   const [isUploading, setIsUploading] = useState(false);
-  const [certificateType, setCertificateType] = useState("degree");
+  const [isDragOverExcel, setIsDragOverExcel] = useState(false);
+
   const [previewVisible, setPreviewVisible] = useState(true);
+  const [processedExcelData, setProcessedExcelData] = useState([]);
+  const [isDragOverCertificate, setIsDragOverCertificate] = useState(false);
 
   // Form states for certificate generation
-  const [recipientName, setRecipientName] = useState("Certificate Recipient");
+  const [recipientName, setRecipientName] = useState("");
   const [recipientEmail, setRecipientEmail] = useState("");
-  const [certificateTitle, setCertificateTitle] = useState("Certificate Title");
-  const [issuerName, setIssuerName] = useState("Issuing Institution");
+  const [certificateTitle, setCertificateTitle] = useState("");
+  const [issuerName, setIssuerName] = useState("");
   const [issueDate, setIssueDate] = useState(
     new Date().toISOString().split("T")[0]
   );
@@ -40,9 +48,9 @@ export default function IssuerPage() {
     "For successfully completing the requirements"
   );
   const [leftSignature, setLeftSignature] = useState("");
-  const [leftSignatureName, setLeftSignatureName] = useState("Rufus Stewart");
+  const [leftSignatureName, setLeftSignatureName] = useState("");
   const [rightSignature, setRightSignature] = useState("");
-  const [rightSignatureName, setRightSignatureName] = useState("Olivia Wilson");
+  const [rightSignatureName, setRightSignatureName] = useState("");
   const [certificateId, setCertificateId] = useState("");
   const [certificateTemplate, setCertificateTemplate] = useState(null);
   const [isEditMode, setIsEditMode] = useState(false);
@@ -52,11 +60,12 @@ export default function IssuerPage() {
 
   // Element positions
   const [elementPositions, setElementPositions] = useState({
-    recipientName: { x: 100, y: 150 },
-    description: { x: 100, y: 220 },
-    leftSignature: { x: 100, y: 300 },
-    rightSignature: { x: 300, y: 300 },
-    certificateId: { x: 400, y: 380 },
+    certificateTitle: { x: 100, y: 80 },
+    issuerName: { x: 100, y: 120 },
+    recipientName: { x: 100, y: 180 },
+    description: { x: 100, y: 240 },
+    leftSignature: { x: 100, y: 320 },
+    rightSignature: { x: 300, y: 320 },
   });
 
   // Handle position changes
@@ -72,7 +81,9 @@ export default function IssuerPage() {
   const [isUploadingToIPFS, setIsUploadingToIPFS] = useState(false);
   const [ipfsHash, setIpfsHash] = useState("");
   const [ipfsError, setIpfsError] = useState("");
-  const [pinataAuthenticated, setPinataAuthenticated] = useState(null);
+  const [ipfsConnectionStatus, setIpfsConnectionStatus] = useState(null);
+  const [isTestingIPFS, setIsTestingIPFS] = useState(false);
+  const [showCopiedMessage, setShowCopiedMessage] = useState(false);
 
   // Certificate viewer state
   const [viewingCertificate, setViewingCertificate] = useState(null);
@@ -81,7 +92,7 @@ export default function IssuerPage() {
   const [holderAddress, setHolderAddress] = useState("");
   const [certificateName, setCertificateName] = useState("");
   const [completionDate, setCompletionDate] = useState("");
-  const [additionalDetails, setAdditionalDetails] = useState("");
+  const [institutionName, setInstitutionName] = useState("");
   const [issuingCertificate, setIssuingCertificate] = useState(false);
   const [issuedCertificates, setIssuedCertificates] = useState([
     {
@@ -110,53 +121,47 @@ export default function IssuerPage() {
     },
   ]);
 
-  // Test Pinata authentication when component mounts
-  useEffect(() => {
-    async function checkPinataAuth() {
-      try {
-        // In development mode, consider authentication successful
-        if (process.env.NODE_ENV === "development") {
-          console.log("Development mode: Using mock Pinata authentication");
-          setPinataAuthenticated(true);
-          return;
-        }
-
-        const isAuthenticated = await testAuthentication();
-        setPinataAuthenticated(isAuthenticated);
-        console.log(
-          "Pinata authentication:",
-          isAuthenticated ? "Successful" : "Failed"
-        );
-
-        if (!isAuthenticated) {
-          setIpfsError(
-            "Pinata authentication failed. Please check your API keys."
-          );
-        }
-      } catch (error) {
-        console.error("Error checking Pinata authentication:", error);
-
-        // In development mode, don't show errors
-        if (process.env.NODE_ENV === "development") {
-          setPinataAuthenticated(true);
-          return;
-        }
-
-        setPinataAuthenticated(false);
-        setIpfsError(
-          "Error connecting to Pinata. Please check your network connection and API keys."
-        );
-      }
-    }
-
-    checkPinataAuth();
-  }, []);
-
   // Handle file upload for Excel files
   const handleFileUpload = (e) => {
     const file = e.target.files[0];
     if (file) {
       setSelectedFile(file);
+    }
+  };
+
+  // Handle drag and drop events for Excel files
+  const handleDragOver = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+  };
+
+  const handleDragEnter = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragOverExcel(true);
+  };
+
+  const handleDragLeave = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragOverExcel(false);
+  };
+
+  const handleDrop = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragOverExcel(false);
+
+    const files = e.dataTransfer.files;
+    if (files.length > 0) {
+      const file = files[0];
+      // Check file type
+      const fileExtension = file.name.split(".").pop().toLowerCase();
+      if (["xlsx", "xls", "csv"].includes(fileExtension)) {
+        setSelectedFile(file);
+      } else {
+        showError("Please upload a valid Excel file (.xlsx, .xls) or CSV file");
+      }
     }
   };
 
@@ -171,19 +176,166 @@ export default function IssuerPage() {
     }
   };
 
+  // Handle drag and drop events for certificate files
+  const handleCertificateDragOver = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+  };
+
+  const handleCertificateDragEnter = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragOverCertificate(true);
+  };
+
+  const handleCertificateDragLeave = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragOverCertificate(false);
+  };
+
+  const handleCertificateDrop = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragOverCertificate(false);
+
+    const files = e.dataTransfer.files;
+    if (files.length > 0) {
+      const file = files[0];
+      // Check file type for certificate files
+      const fileExtension = file.name.split(".").pop().toLowerCase();
+      if (["pdf", "jpg", "jpeg", "png", "json"].includes(fileExtension)) {
+        setCertificateFile(file);
+        // Reset IPFS states
+        setIpfsHash("");
+        setIpfsError("");
+      } else {
+        showError(
+          "Please upload a valid certificate file (PDF, JPG, PNG, JSON)"
+        );
+      }
+    }
+  };
+
   // Process Excel file
-  const handleProcessExcel = () => {
+  const handleProcessExcel = async () => {
     if (!selectedFile) return;
 
     setIsUploading(true);
 
-    // Simulate file upload and processing
-    setTimeout(() => {
+    try {
+      // Check if the file is a valid Excel file
+      const fileExtension = selectedFile.name.split(".").pop().toLowerCase();
+      if (!["xlsx", "xls", "csv"].includes(fileExtension)) {
+        showError("Please upload a valid Excel file (.xlsx, .xls) or CSV file");
+        setIsUploading(false);
+        return;
+      }
+
+      // Try to import XLSX dynamically
+      let XLSX;
+      try {
+        XLSX = await import("xlsx");
+      } catch (error) {
+        showError(
+          "Excel processing library not available. Please install xlsx package: npm install xlsx"
+        );
+        setIsUploading(false);
+        return;
+      }
+
+      const reader = new FileReader();
+
+      reader.onload = (e) => {
+        try {
+          const data = new Uint8Array(e.target.result);
+          const workbook = XLSX.read(data, { type: "array" });
+
+          // Get the first worksheet
+          const firstSheetName = workbook.SheetNames[0];
+          const worksheet = workbook.Sheets[firstSheetName];
+
+          // Convert to JSON
+          const jsonData = XLSX.utils.sheet_to_json(worksheet);
+
+          if (jsonData.length === 0) {
+            showError(
+              "The Excel file appears to be empty or has no valid data"
+            );
+            setIsUploading(false);
+            return;
+          }
+
+          // Process the data and set up certificates
+          processCertificateData(jsonData);
+        } catch (error) {
+          console.error("Error processing Excel file:", error);
+          showError(`Error processing Excel file: ${error.message}`);
+          setIsUploading(false);
+        }
+      };
+
+      reader.onerror = () => {
+        showError("Error reading the file");
+        setIsUploading(false);
+      };
+
+      // Read the file
+      reader.readAsArrayBuffer(selectedFile);
+    } catch (error) {
+      console.error("Error in handleProcessExcel:", error);
+      showError(`Error processing file: ${error.message}`);
       setIsUploading(false);
-      showSuccess(
-        "Excel file processed successfully! Ready to customize certificates."
+    }
+  };
+
+  // Process certificate data from Excel
+  const processCertificateData = (data) => {
+    console.log("Processing certificate data:", data);
+
+    // Validate required columns
+    const firstRow = data[0];
+    const requiredFields = ["Name", "Address"];
+    const missingFields = requiredFields.filter(
+      (field) => !(field in firstRow)
+    );
+
+    if (missingFields.length > 0) {
+      showWarning(
+        `Missing required columns: ${missingFields.join(
+          ", "
+        )}. Found columns: ${Object.keys(firstRow).join(", ")}`
       );
-    }, 1500);
+    }
+
+    // Store the processed data
+    setProcessedExcelData(data);
+    setIsUploading(false);
+    showSuccess(
+      `Excel file processed successfully! Found ${data.length} certificate recipient(s). Ready to customize certificates.`
+    );
+  };
+
+  // Test IPFS connection
+  const testIPFSConnection = async () => {
+    setIsTestingIPFS(true);
+    try {
+      const status = await testAuthentication();
+      setIpfsConnectionStatus(status);
+
+      if (status.connected) {
+        showSuccess(
+          `Connected to IPFS! Peer ID: ${status.peerID?.substring(0, 12)}...`
+        );
+      } else {
+        showError(`IPFS connection failed: ${status.error}`);
+      }
+    } catch (error) {
+      setIpfsConnectionStatus({ connected: false, error: error.message });
+      showError(`IPFS connection failed: ${error.message}`);
+    } finally {
+      setIsTestingIPFS(false);
+    }
   };
 
   // Upload certificate to IPFS
@@ -203,7 +355,7 @@ export default function IssuerPage() {
       );
 
       // Upload the file to IPFS via Pinata
-      const fileName = `${certificateType}_${Date.now()}`;
+      const fileName = `certificate_${Date.now()}`;
       console.log("Generated file name:", fileName);
 
       try {
@@ -224,9 +376,9 @@ export default function IssuerPage() {
           `Certificate uploaded to IPFS successfully! Hash: ${result.hash}`
         );
 
-        // In development mode, show additional info
-        if (process.env.NODE_ENV === "development" && result.mockData) {
-          showInfo("Note: Using mock IPFS data in development mode.");
+        // Show IPFS upload success
+        if (result.ipfsData) {
+          showInfo("File successfully uploaded to your local IPFS node!");
         }
       } catch (uploadError) {
         console.error("Upload failed with error:", uploadError);
@@ -255,7 +407,12 @@ export default function IssuerPage() {
   const handleIssueCertificate = (e) => {
     e.preventDefault();
 
-    if (!holderAddress || !certificateName || !completionDate) {
+    if (
+      !holderAddress ||
+      !certificateName ||
+      !completionDate ||
+      !institutionName
+    ) {
       showWarning("Please fill in all required fields");
       return;
     }
@@ -275,13 +432,12 @@ export default function IssuerPage() {
           .padStart(3, "0")}`,
         holder: holderAddress,
         name: "New Recipient", // In real app, would be fetched from database
-        type:
-          certificateType.charAt(0).toUpperCase() + certificateType.slice(1),
+        type: "Certificate",
         title: certificateName,
         issueDate: completionDate,
         status: "Issued",
-        institution: "Blockchain University",
-        details: additionalDetails || "Certificate details not provided",
+        institution: institutionName,
+        details: "Certificate issued successfully",
         hash: ipfsHash,
       };
 
@@ -292,7 +448,7 @@ export default function IssuerPage() {
       setHolderAddress("");
       setCertificateName("");
       setCompletionDate("");
-      setAdditionalDetails("");
+      setInstitutionName("");
       setCertificateFile(null);
       setIpfsHash("");
 
@@ -322,6 +478,33 @@ export default function IssuerPage() {
     setViewingCertificate(null);
   };
 
+  // Save profile changes
+
+  // Copy text to clipboard
+  const copyToClipboard = async (text) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setShowCopiedMessage(true);
+      setTimeout(() => setShowCopiedMessage(false), 2000);
+    } catch (err) {
+      console.error("Failed to copy: ", err);
+      // Fallback for older browsers
+      const textArea = document.createElement("textarea");
+      textArea.value = text;
+      document.body.appendChild(textArea);
+      textArea.focus();
+      textArea.select();
+      try {
+        document.execCommand("copy");
+        setShowCopiedMessage(true);
+        setTimeout(() => setShowCopiedMessage(false), 2000);
+      } catch (fallbackErr) {
+        console.error("Fallback copy failed: ", fallbackErr);
+      }
+      document.body.removeChild(textArea);
+    }
+  };
+
   // Toggle certificate preview
   const handlePreviewToggle = () => {
     setPreviewVisible(!previewVisible);
@@ -346,29 +529,307 @@ export default function IssuerPage() {
     }
   }, []);
 
-  // Function to generate a new certificate ID in IPFS hash-like format
-  const generateCertificateId = () => {
-    // Create a hash-like ID that resembles IPFS format (Qm + 44 chars of base58)
+  // Function to generate a certificate ID based on recipient details
+  const generateCertificateId = (recipientName, issuerName, issueDate) => {
+    // Create a comprehensive input string
+    const input = `${recipientName}|${issuerName}|${issueDate}|${Date.now()}`;
+
+    // Create a more sophisticated hash
+    let hash = "";
     const chars =
       "QWERTYUIOPASDFGHJKLZXCVBNMqwertyuiopasdfghjklzxcvbnm123456789";
-    let hash = "Qm";
-    for (let i = 0; i < 44; i++) {
-      hash += chars.charAt(Math.floor(Math.random() * chars.length));
+
+    // Convert input to a numeric seed
+    let seed = 0;
+    for (let i = 0; i < input.length; i++) {
+      seed = ((seed << 5) - seed + input.charCodeAt(i)) & 0xffffffff;
     }
-    setCertificateId(hash);
+
+    // Generate 44 characters using the seed
+    for (let i = 0; i < 44; i++) {
+      // Create variation by combining seed with position
+      const variation = seed + i * 1234567 + input.charCodeAt(i % input.length);
+      const index = Math.abs(variation) % chars.length;
+      hash += chars[index];
+
+      // Update seed for next iteration
+      seed = (seed * 1103515245 + 12345) & 0xffffffff;
+    }
+
+    // Return IPFS-like format
+    return `Qm${hash}`;
   };
 
-  // Generate certificate ID on initial load
-  useEffect(() => {
-    generateCertificateId();
-  }, []);
+  // Generate certificate PDF
+  const generateCertificatePDF = async () => {
+    if (!recipientName || !certificateTitle || !issuerName) {
+      showError(
+        "Please fill in at least Recipient Name, Certificate Title, and Issuing Institution"
+      );
+      return;
+    }
 
-  // Generate certificate PDF (placeholder function)
-  const generateCertificatePDF = () => {
-    showInfo(
-      "Certificate generation feature will be implemented with a PDF library in the future."
-    );
-    // In a real implementation, would use a library like jsPDF to generate the PDF
+    try {
+      // Try to import required libraries dynamically
+      let jsPDF, html2canvas;
+      try {
+        const jsPDFModule = await import("jspdf");
+        const html2canvasModule = await import("html2canvas");
+        jsPDF = jsPDFModule.default;
+        html2canvas = html2canvasModule.default;
+      } catch (error) {
+        showError(
+          "PDF generation libraries not available. Please install: npm install jspdf html2canvas"
+        );
+        return;
+      }
+
+      showInfo("Generating certificate PDF...");
+
+      // Get the certificate preview element
+      const certificateElement = certificateContainerRef.current;
+      if (!certificateElement) {
+        showError("Certificate preview not found");
+        return;
+      }
+
+      // Force a repaint/reflow to ensure positioning is applied
+      certificateElement.offsetHeight;
+
+      // Get the exact bounds of the certificate container
+      const rect = certificateElement.getBoundingClientRect();
+
+      // Temporarily hide edit mode styling for clean capture
+      const draggableElements =
+        certificateElement.querySelectorAll(".absolute");
+      const originalStyles = [];
+
+      draggableElements.forEach((element, index) => {
+        originalStyles[index] = {
+          border: element.style.border,
+          padding: element.style.padding,
+          backgroundColor: element.style.backgroundColor,
+        };
+        element.style.border = "none";
+        element.style.padding = "0";
+        element.style.backgroundColor = "transparent";
+      });
+
+      // Create canvas from the certificate element with precise positioning
+      const canvas = await html2canvas(certificateElement, {
+        backgroundColor: "#ffffff",
+        scale: 2,
+        logging: false,
+        useCORS: true,
+        allowTaint: true,
+        width: certificateElement.offsetWidth,
+        height: certificateElement.offsetHeight,
+        x: 0,
+        y: 0,
+      });
+
+      // Restore original styling
+      draggableElements.forEach((element, index) => {
+        if (originalStyles[index]) {
+          element.style.border = originalStyles[index].border;
+          element.style.padding = originalStyles[index].padding;
+          element.style.backgroundColor = originalStyles[index].backgroundColor;
+        }
+      });
+
+      // Create PDF
+      const imgData = canvas.toDataURL("image/png");
+      const pdf = new jsPDF({
+        orientation: "landscape",
+        unit: "mm",
+        format: "a4",
+      });
+
+      // Calculate dimensions to fit the image
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pdfHeight = pdf.internal.pageSize.getHeight();
+      const imgWidth = canvas.width;
+      const imgHeight = canvas.height;
+      const ratio = Math.min(pdfWidth / imgWidth, pdfHeight / imgHeight);
+
+      const finalWidth = imgWidth * ratio;
+      const finalHeight = imgHeight * ratio;
+      const x = (pdfWidth - finalWidth) / 2;
+      const y = (pdfHeight - finalHeight) / 2;
+
+      // Add image to PDF
+      pdf.addImage(imgData, "PNG", x, y, finalWidth, finalHeight);
+
+      // Generate filename
+      const filename = `${recipientName.replace(
+        /[^a-zA-Z0-9]/g,
+        "_"
+      )}_${certificateTitle.replace(/[^a-zA-Z0-9]/g, "_")}_Certificate.pdf`;
+
+      // Save the PDF
+      pdf.save(filename);
+
+      showSuccess("Certificate PDF generated successfully!");
+    } catch (error) {
+      console.error("Error generating PDF:", error);
+      showError(`Error generating PDF: ${error.message}`);
+    }
+  };
+
+  // Generate certificates for all Excel data
+  const generateBulkCertificates = async () => {
+    if (processedExcelData.length === 0) {
+      showError(
+        "No Excel data found. Please upload and process an Excel file first."
+      );
+      return;
+    }
+
+    if (!certificateTitle || !issuerName) {
+      showError(
+        "Please fill in Certificate Title and Issuing Institution before generating bulk certificates"
+      );
+      return;
+    }
+
+    try {
+      // Try to import required libraries dynamically
+      let jsPDF, html2canvas;
+      try {
+        const jsPDFModule = await import("jspdf");
+        const html2canvasModule = await import("html2canvas");
+        jsPDF = jsPDFModule.default;
+        html2canvas = html2canvasModule.default;
+      } catch (error) {
+        showError(
+          "PDF generation libraries not available. Please install: npm install jspdf html2canvas"
+        );
+        return;
+      }
+
+      showInfo(`Generating ${processedExcelData.length} certificates...`);
+
+      // Store the original recipient name
+      const originalName = recipientName;
+
+      for (let i = 0; i < processedExcelData.length; i++) {
+        const recipient = processedExcelData[i];
+
+        // Generate a certificate ID based on recipient details
+        const recipientNameForId =
+          recipient.Name || recipient.name || `Recipient ${i + 1}`;
+        const uniqueHash = generateCertificateId(
+          recipientNameForId,
+          issuerName,
+          issueDate
+        );
+        setCertificateId(uniqueHash);
+
+        // Temporarily set the recipient name for this certificate
+        setRecipientName(
+          recipient.Name || recipient.name || `Recipient ${i + 1}`
+        );
+
+        // Wait longer for the state to update and re-render
+        await new Promise((resolve) => setTimeout(resolve, 800));
+
+        // Force a repaint/reflow to ensure positioning is applied
+        const certificateElement = certificateContainerRef.current;
+        if (!certificateElement) continue;
+
+        // Force reflow by accessing offsetHeight
+        certificateElement.offsetHeight;
+
+        // Get the exact bounds of the certificate container
+        const rect = certificateElement.getBoundingClientRect();
+
+        // Temporarily hide edit mode styling for clean capture
+        const draggableElements =
+          certificateElement.querySelectorAll(".absolute");
+        const originalStyles = [];
+
+        draggableElements.forEach((element, index) => {
+          originalStyles[index] = {
+            border: element.style.border,
+            padding: element.style.padding,
+            backgroundColor: element.style.backgroundColor,
+          };
+          element.style.border = "none";
+          element.style.padding = "0";
+          element.style.backgroundColor = "transparent";
+        });
+
+        // Create canvas from the certificate element with precise positioning
+        const canvas = await html2canvas(certificateElement, {
+          backgroundColor: "#ffffff",
+          scale: 2,
+          logging: false,
+          useCORS: true,
+          allowTaint: true,
+          width: certificateElement.offsetWidth,
+          height: certificateElement.offsetHeight,
+          x: 0,
+          y: 0,
+        });
+
+        // Restore original styling
+        draggableElements.forEach((element, index) => {
+          if (originalStyles[index]) {
+            element.style.border = originalStyles[index].border;
+            element.style.padding = originalStyles[index].padding;
+            element.style.backgroundColor =
+              originalStyles[index].backgroundColor;
+          }
+        });
+
+        // Create PDF
+        const imgData = canvas.toDataURL("image/png");
+        const pdf = new jsPDF({
+          orientation: "landscape",
+          unit: "mm",
+          format: "a4",
+        });
+
+        // Calculate dimensions to fit the image
+        const pdfWidth = pdf.internal.pageSize.getWidth();
+        const pdfHeight = pdf.internal.pageSize.getHeight();
+        const imgWidth = canvas.width;
+        const imgHeight = canvas.height;
+        const ratio = Math.min(pdfWidth / imgWidth, pdfHeight / imgHeight);
+
+        const finalWidth = imgWidth * ratio;
+        const finalHeight = imgHeight * ratio;
+        const x = (pdfWidth - finalWidth) / 2;
+        const y = (pdfHeight - finalHeight) / 2;
+
+        // Add image to PDF
+        pdf.addImage(imgData, "PNG", x, y, finalWidth, finalHeight);
+
+        // Generate filename
+        const currentRecipientName =
+          recipient.Name || recipient.name || `Recipient_${i + 1}`;
+        const filename = `${currentRecipientName.replace(
+          /[^a-zA-Z0-9]/g,
+          "_"
+        )}_${certificateTitle.replace(/[^a-zA-Z0-9]/g, "_")}_Certificate.pdf`;
+
+        // Save the PDF
+        pdf.save(filename);
+
+        // Small delay between downloads
+        await new Promise((resolve) => setTimeout(resolve, 500));
+      }
+
+      // Restore original recipient name
+      setRecipientName(originalName);
+
+      showSuccess(
+        `Successfully generated ${processedExcelData.length} certificates!`
+      );
+    } catch (error) {
+      console.error("Error generating bulk certificates:", error);
+      showError(`Error generating bulk certificates: ${error.message}`);
+    }
   };
 
   // Handle certificate template upload
@@ -463,11 +924,20 @@ export default function IssuerPage() {
                     </h2>
                     <p className="text-gray-600 mb-6">
                       Upload an Excel file with certificate data including
-                      holder names, wallet addresses, and certificate details.
+                      recipient names and wallet addresses.
                     </p>
 
                     <div className="mb-6">
-                      <div className="border-2 border-dashed border-gray-300 rounded-md p-6 text-center">
+                      <div
+                        className={`border-2 border-dashed rounded-md p-6 text-center transition-colors ${
+                          isDragOverExcel
+                            ? "border-blue-400 bg-blue-50"
+                            : "border-gray-300"
+                        }`}
+                        onDragOver={handleDragOver}
+                        onDragEnter={handleDragEnter}
+                        onDragLeave={handleDragLeave}
+                        onDrop={handleDrop}>
                         {selectedFile ? (
                           <div className="mb-4">
                             <svg
@@ -535,6 +1005,64 @@ export default function IssuerPage() {
                       className="w-full">
                       {isUploading ? "Processing..." : "Process Excel File"}
                     </Button>
+
+                    {/* Display processed Excel data */}
+                    {processedExcelData.length > 0 && (
+                      <div className="mt-6 p-4 bg-green-50 border border-green-200 rounded-md">
+                        <h4 className="text-green-800 font-medium mb-2">
+                          ✓ Excel Data Processed Successfully
+                        </h4>
+                        <p className="text-green-700 mb-3">
+                          Found {processedExcelData.length} recipients
+                        </p>
+                        <div className="max-h-40 overflow-y-auto">
+                          <table className="w-full text-xs">
+                            <thead>
+                              <tr className="bg-green-100">
+                                <th className="text-left p-1">Name</th>
+                                <th className="text-left p-1">Address</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {processedExcelData
+                                .slice(0, 5)
+                                .map((item, index) => (
+                                  <tr
+                                    key={index}
+                                    className="border-b border-green-200">
+                                    <td className="p-1">
+                                      {item.Name || item.name || "N/A"}
+                                    </td>
+                                    <td className="p-1 font-mono text-xs">
+                                      {item.Address || item.address || "N/A"}
+                                    </td>
+                                  </tr>
+                                ))}
+                              {processedExcelData.length > 5 && (
+                                <tr>
+                                  <td
+                                    colSpan="2"
+                                    className="p-1 text-center text-green-600">
+                                    ... and {processedExcelData.length - 5} more
+                                  </td>
+                                </tr>
+                              )}
+                            </tbody>
+                          </table>
+                        </div>
+                        <Button
+                          onClick={generateBulkCertificates}
+                          className="mt-3 w-full bg-green-600 hover:bg-green-700"
+                          disabled={!certificateTitle || !issuerName}>
+                          Generate All Certificates ({processedExcelData.length}{" "}
+                          PDFs)
+                        </Button>
+                        <p className="text-xs text-green-600 mt-1">
+                          Make sure to fill in Certificate Title and Issuing
+                          Institution above before generating bulk certificates
+                        </p>
+                      </div>
+                    )}
                   </div>
 
                   <div className="bg-white rounded-lg shadow-sm p-6">
@@ -544,56 +1072,6 @@ export default function IssuerPage() {
                     <p className="text-gray-600 mb-6">
                       Design and create certificates directly on the web app.
                     </p>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                          Certificate Type
-                        </label>
-                        <select
-                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-blue"
-                          value={certificateType}
-                          onChange={(e) => setCertificateType(e.target.value)}>
-                          <option value="degree">Degree</option>
-                          <option value="diploma">Diploma</option>
-                          <option value="course">Course Completion</option>
-                          <option value="certification">
-                            Professional Certification
-                          </option>
-                        </select>
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                          Certificate ID
-                        </label>
-                        <div className="flex items-center">
-                          <input
-                            type="text"
-                            className="flex-1 px-3 py-2 border border-gray-300 rounded-l-md focus:outline-none focus:ring-2 focus:ring-primary-blue"
-                            value={certificateId}
-                            readOnly
-                          />
-                          <button
-                            onClick={generateCertificateId}
-                            className="px-3 py-2 bg-gray-100 border border-gray-300 rounded-r-md hover:bg-gray-200 text-gray-600"
-                            title="Generate new ID">
-                            <svg
-                              xmlns="http://www.w3.org/2000/svg"
-                              className="h-5 w-5"
-                              fill="none"
-                              viewBox="0 0 24 24"
-                              stroke="currentColor">
-                              <path
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                strokeWidth={2}
-                                d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
-                              />
-                            </svg>
-                          </button>
-                        </div>
-                      </div>
-                    </div>
 
                     {/* Certificate details form */}
                     <div className="border-t border-gray-200 pt-4 mb-6">
@@ -661,20 +1139,20 @@ export default function IssuerPage() {
                             className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-blue"
                             value={recipientName}
                             onChange={(e) => setRecipientName(e.target.value)}
-                            placeholder="Enter recipient's full name"
+                            placeholder="Full Name"
                             required
                           />
                         </div>
                         <div>
                           <label className="block text-sm font-medium text-gray-700 mb-1">
-                            Recipient Email
+                            Issue Date *
                           </label>
                           <input
-                            type="email"
+                            type="date"
                             className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-blue"
-                            value={recipientEmail}
-                            onChange={(e) => setRecipientEmail(e.target.value)}
-                            placeholder="recipient@example.com"
+                            value={issueDate}
+                            onChange={(e) => setIssueDate(e.target.value)}
+                            required
                           />
                         </div>
                       </div>
@@ -691,7 +1169,7 @@ export default function IssuerPage() {
                             onChange={(e) =>
                               setCertificateTitle(e.target.value)
                             }
-                            placeholder="e.g., Bachelor of Science in Computer Science"
+                            placeholder="e.g., Bachelor of Computer Science"
                             required
                           />
                         </div>
@@ -704,22 +1182,7 @@ export default function IssuerPage() {
                             className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-blue"
                             value={issuerName}
                             onChange={(e) => setIssuerName(e.target.value)}
-                            placeholder="Enter institution name"
-                            required
-                          />
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">
-                            Issue Date *
-                          </label>
-                          <input
-                            type="date"
-                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-blue"
-                            value={issueDate}
-                            onChange={(e) => setIssueDate(e.target.value)}
+                            placeholder="Institution Name"
                             required
                           />
                         </div>
@@ -790,35 +1253,14 @@ export default function IssuerPage() {
                         <label className="block text-sm font-medium text-gray-700 mb-1">
                           Certificate ID
                         </label>
-                        <div className="flex items-center">
-                          <input
-                            type="text"
-                            className="flex-1 px-3 py-2 border border-gray-300 rounded-l-md bg-gray-50 focus:outline-none font-mono text-sm"
-                            value={certificateId}
-                            readOnly
-                          />
-                          <button
-                            onClick={generateCertificateId}
-                            className="px-3 py-2 bg-gray-100 border border-gray-300 rounded-r-md hover:bg-gray-200 text-gray-600"
-                            title="Generate new ID">
-                            <svg
-                              xmlns="http://www.w3.org/2000/svg"
-                              className="h-5 w-5"
-                              fill="none"
-                              viewBox="0 0 24 24"
-                              stroke="currentColor">
-                              <path
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                strokeWidth={2}
-                                d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
-                              />
-                            </svg>
-                          </button>
-                        </div>
+                        <input
+                          type="text"
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-50 focus:outline-none font-mono text-sm"
+                          value={certificateId}
+                          readOnly
+                        />
                         <p className="text-xs text-gray-500 mt-1">
-                          System-generated unique identifier for this
-                          certificate (IPFS format)
+                          Auto-generated identifier based on certificate details
                         </p>
                       </div>
                     </div>
@@ -833,7 +1275,7 @@ export default function IssuerPage() {
                       <Button
                         className="flex-1"
                         onClick={generateCertificatePDF}>
-                        Generate Certificate
+                        Generate Certificate PDF
                       </Button>
                     </div>
 
@@ -895,14 +1337,46 @@ export default function IssuerPage() {
                             {certificateTemplate && (
                               <>
                                 <DraggableElement
+                                  id="certificateTitle"
+                                  position={elementPositions.certificateTitle}
+                                  onPositionChange={handlePositionChange}
+                                  isEditMode={isEditMode}
+                                  containerRef={certificateContainerRef}
+                                  className="text-center">
+                                  <div
+                                    className="text-2xl font-bold px-4 py-1 min-w-[200px]"
+                                    style={{
+                                      fontFamily: "Times New Roman, serif",
+                                    }}>
+                                    {certificateTitle || "Certificate Title"}
+                                  </div>
+                                </DraggableElement>
+
+                                <DraggableElement
+                                  id="issuerName"
+                                  position={elementPositions.issuerName}
+                                  onPositionChange={handlePositionChange}
+                                  isEditMode={isEditMode}
+                                  containerRef={certificateContainerRef}
+                                  className="text-center">
+                                  <div
+                                    className="text-lg font-medium px-4 py-1 min-w-[200px]"
+                                    style={{
+                                      fontFamily: "Times New Roman, serif",
+                                    }}>
+                                    {issuerName || "Institution Name"}
+                                  </div>
+                                </DraggableElement>
+
+                                <DraggableElement
                                   id="recipientName"
                                   position={elementPositions.recipientName}
                                   onPositionChange={handlePositionChange}
                                   isEditMode={isEditMode}
                                   containerRef={certificateContainerRef}
                                   className="text-center">
-                                  <div className="text-3xl font-medium px-4 py-1 min-w-[200px]">
-                                    {recipientName}
+                                  <div className="text-4xl font-script px-4 py-1 min-w-[200px]">
+                                    {recipientName || "Recipient Name"}
                                   </div>
                                 </DraggableElement>
 
@@ -913,8 +1387,13 @@ export default function IssuerPage() {
                                   isEditMode={isEditMode}
                                   containerRef={certificateContainerRef}
                                   className="text-center">
-                                  <div className="text-sm max-w-md px-4 py-1 min-w-[200px]">
-                                    {certificateDescription}
+                                  <div
+                                    className="text-sm max-w-md px-4 py-1 min-w-[200px]"
+                                    style={{
+                                      fontFamily: "Times New Roman, serif",
+                                    }}>
+                                    {certificateDescription ||
+                                      "Certificate Description"}
                                   </div>
                                 </DraggableElement>
 
@@ -942,8 +1421,12 @@ export default function IssuerPage() {
                                         Signature
                                       </div>
                                     )}
-                                    <p className="text-sm">
-                                      {leftSignatureName}
+                                    <p
+                                      className="text-sm"
+                                      style={{
+                                        fontFamily: "Times New Roman, serif",
+                                      }}>
+                                      {leftSignatureName || "Left Signer"}
                                     </p>
                                   </div>
                                 </DraggableElement>
@@ -974,24 +1457,15 @@ export default function IssuerPage() {
                                         Signature
                                       </div>
                                     )}
-                                    <p className="text-sm">
-                                      {rightSignatureName}
+                                    <p
+                                      className="text-sm"
+                                      style={{
+                                        fontFamily: "Times New Roman, serif",
+                                      }}>
+                                      {rightSignatureName || "Right Signer"}
                                     </p>
                                   </div>
                                 </DraggableElement>
-
-                                {certificateId && (
-                                  <DraggableElement
-                                    id="certificateId"
-                                    position={elementPositions.certificateId}
-                                    onPositionChange={handlePositionChange}
-                                    isEditMode={isEditMode}
-                                    containerRef={certificateContainerRef}>
-                                    <div className="text-xs">
-                                      ID: {certificateId}
-                                    </div>
-                                  </DraggableElement>
-                                )}
                               </>
                             )}
                           </div>
@@ -1013,7 +1487,7 @@ export default function IssuerPage() {
                 </div>
 
                 <div className="md:col-span-1">
-                  <div className="bg-white rounded-lg shadow-sm p-6">
+                  <div className="bg-white rounded-lg shadow-sm p-6 mb-8">
                     <h2 className="text-xl font-semibold mb-4">How It Works</h2>
                     <ol className="list-decimal list-inside space-y-4 text-gray-600">
                       <li>
@@ -1040,48 +1514,37 @@ export default function IssuerPage() {
                         addresses.
                       </li>
                     </ol>
+                  </div>
 
-                    <div className="mt-8 p-4 bg-blue-50 rounded-md">
-                      <h3 className="text-primary-blue font-medium mb-2">
-                        Blockcerts Standard
-                      </h3>
-                      <p className="text-sm text-gray-600">
-                        All certificates follow the Blockcerts standard for
-                        blockchain verification, ensuring interoperability and
-                        authenticity across platforms.
-                      </p>
-                    </div>
-
-                    <div className="mt-8 p-4 bg-gray-50 rounded-md">
-                      <h3 className="text-gray-700 font-medium mb-2">
-                        How to Use Your Own Template
-                      </h3>
-                      <ol className="list-decimal list-inside space-y-2 text-sm text-gray-600">
-                        <li>
-                          Design your certificate in Canva exactly how you want
-                          it to look
-                        </li>
-                        <li>
-                          Export it as a PNG (with transparent background if
-                          applicable)
-                        </li>
-                        <li>
-                          In the certificate generator, use the "Upload
-                          Template" button to upload your Canva design
-                        </li>
-                        <li>
-                          Your certificate design will appear as the background
-                        </li>
-                        <li>
-                          Click "Position Elements" to drag and place text and
-                          signatures exactly where you want them
-                        </li>
-                        <li>
-                          Click "Save Positions" when you're satisfied with the
-                          layout
-                        </li>
-                      </ol>
-                    </div>
+                  <div className="bg-white rounded-lg shadow-sm p-6">
+                    <h2 className="text-xl font-semibold mb-4">
+                      How to Use Your Own Template
+                    </h2>
+                    <ol className="list-decimal list-inside space-y-4 text-gray-600">
+                      <li>
+                        Design your certificate in Canva exactly how you want it
+                        to look
+                      </li>
+                      <li>
+                        Export it as a PNG (with transparent background if
+                        applicable)
+                      </li>
+                      <li>
+                        In the certificate generator, use the "Upload Template"
+                        button to upload your Canva design
+                      </li>
+                      <li>
+                        Your certificate design will appear as the background
+                      </li>
+                      <li>
+                        Click "Position Elements" to drag and place text and
+                        signatures exactly where you want them
+                      </li>
+                      <li>
+                        Click "Save Positions" when you're satisfied with the
+                        layout
+                      </li>
+                    </ol>
                   </div>
                 </div>
               </div>
@@ -1095,14 +1558,83 @@ export default function IssuerPage() {
                     <h2 className="text-xl font-semibold mb-4">
                       Upload Certificate to IPFS
                     </h2>
-                    <p className="text-gray-600 mb-6">
+                    <p className="text-gray-600 mb-4">
                       Upload your certificate file to IPFS for decentralized
                       storage. This will provide a unique hash that will be used
                       to issue the certificate on the blockchain.
                     </p>
 
+                    {/* IPFS Connection Status */}
+                    <div className="mb-6 p-4 border rounded-lg">
+                      <div className="flex items-center justify-between mb-2">
+                        <h3 className="font-medium text-gray-700">
+                          IPFS Connection
+                        </h3>
+                        <Button
+                          onClick={testIPFSConnection}
+                          disabled={isTestingIPFS}
+                          variant="outline"
+                          size="sm">
+                          {isTestingIPFS ? "Testing..." : "Test Connection"}
+                        </Button>
+                      </div>
+
+                      {ipfsConnectionStatus ? (
+                        <div
+                          className={`flex items-center ${
+                            ipfsConnectionStatus.connected
+                              ? "text-green-600"
+                              : "text-red-600"
+                          }`}>
+                          <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            className="h-4 w-4 mr-2"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                            stroke="currentColor">
+                            {ipfsConnectionStatus.connected ? (
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth={2}
+                                d="M5 13l4 4L19 7"
+                              />
+                            ) : (
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth={2}
+                                d="M6 18L18 6M6 6l12 12"
+                              />
+                            )}
+                          </svg>
+                          <span className="text-sm">
+                            {ipfsConnectionStatus.connected
+                              ? `Connected (Peer ID: ${ipfsConnectionStatus.peerID?.substring(
+                                  0,
+                                  12
+                                )}...)`
+                              : `Not connected: ${ipfsConnectionStatus.error}`}
+                          </span>
+                        </div>
+                      ) : (
+                        <p className="text-gray-500 text-sm">
+                          Click "Test Connection" to check IPFS Desktop status
+                        </p>
+                      )}
+                    </div>
+
                     <div className="mb-6">
-                      <div className="border-2 border-dashed border-gray-300 rounded-md p-6 text-center">
+                      <div
+                        className={`border-2 border-dashed rounded-md p-6 text-center transition-colors ${
+                          isDragOverCertificate
+                            ? "border-blue-400 bg-blue-50"
+                            : "border-gray-300"
+                        }`}
+                        onDragOver={handleCertificateDragOver}
+                        onDragEnter={handleCertificateDragEnter}
+                        onDragLeave={handleCertificateDragLeave}
+                        onDrop={handleCertificateDrop}>
                         {certificateFile ? (
                           <div className="mb-4">
                             <svg
@@ -1160,7 +1692,7 @@ export default function IssuerPage() {
                         </label>
                       </div>
                       <p className="text-sm text-gray-500 mt-2">
-                        Accepted file formats: PDF, JPG, PNG, JSON (Blockcerts)
+                        Accepted file formats: PDF, JPG, PNG
                       </p>
                     </div>
 
@@ -1169,88 +1701,6 @@ export default function IssuerPage() {
                         {ipfsError}
                       </div>
                     )}
-
-                    {/* Display Pinata authentication status */}
-                    <div
-                      className="mb-4 p-3 rounded-md text-sm"
-                      style={{
-                        backgroundColor:
-                          pinataAuthenticated === null
-                            ? "#f8f9fa"
-                            : pinataAuthenticated
-                            ? "#d1fae5"
-                            : "#fee2e2",
-                        color:
-                          pinataAuthenticated === null
-                            ? "#6b7280"
-                            : pinataAuthenticated
-                            ? "#065f46"
-                            : "#b91c1c",
-                      }}>
-                      <div className="font-medium">
-                        Pinata Authentication Status:{" "}
-                        {pinataAuthenticated === null
-                          ? "Checking..."
-                          : pinataAuthenticated
-                          ? "Connected ✓"
-                          : "Failed ✗"}
-                        {process.env.NODE_ENV === "development" && (
-                          <span className="ml-2 px-2 py-0.5 bg-blue-100 text-blue-800 rounded-full text-xs">
-                            DEV MODE
-                          </span>
-                        )}
-                      </div>
-                      <div className="mt-1">
-                        {pinataAuthenticated === null
-                          ? "Verifying connection to Pinata IPFS service..."
-                          : process.env.NODE_ENV === "development"
-                          ? "Using mock Pinata service in development mode. All operations will succeed with mock data."
-                          : pinataAuthenticated
-                          ? "Ready to upload files to IPFS via Pinata"
-                          : "Cannot connect to Pinata. Please check API keys and network connection."}
-                      </div>
-                      {process.env.NODE_ENV !== "development" && (
-                        <button
-                          onClick={async () => {
-                            try {
-                              setPinataAuthenticated(null);
-                              setIpfsError("");
-
-                              const response = await fetch("/api/check-pinata");
-                              const data = await response.json();
-
-                              console.log("Pinata check result:", data);
-
-                              if (data.success) {
-                                setPinataAuthenticated(true);
-                                showSuccess(
-                                  `Pinata connection successful! Test upload hash: ${data.testUpload.hash}`
-                                );
-                              } else {
-                                setPinataAuthenticated(false);
-                                setIpfsError(
-                                  `Pinata connection failed: ${data.message}`
-                                );
-                                showError(
-                                  `Pinata connection failed: ${data.message}`
-                                );
-                              }
-                            } catch (error) {
-                              console.error("Error checking Pinata:", error);
-                              setPinataAuthenticated(false);
-                              setIpfsError(
-                                `Error checking Pinata: ${error.message}`
-                              );
-                              showError(
-                                `Error checking Pinata: ${error.message}`
-                              );
-                            }
-                          }}
-                          className="mt-2 text-sm text-blue-600 hover:text-blue-800 underline">
-                          Test Pinata Connection
-                        </button>
-                      )}
-                    </div>
 
                     {ipfsHash && (
                       <div className="mb-6 p-4 bg-green-50 rounded-md">
@@ -1268,6 +1718,29 @@ export default function IssuerPage() {
                             className="ml-2 text-primary-blue hover:text-blue-700">
                             View
                           </button>
+                          <button
+                            onClick={() => copyToClipboard(ipfsHash)}
+                            className="ml-2 text-primary-blue hover:text-blue-700 p-1"
+                            title="Copy IPFS hash to clipboard">
+                            <svg
+                              xmlns="http://www.w3.org/2000/svg"
+                              className="h-4 w-4"
+                              fill="none"
+                              viewBox="0 0 24 24"
+                              stroke="currentColor">
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth={2}
+                                d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
+                              />
+                            </svg>
+                          </button>
+                          {showCopiedMessage && (
+                            <span className="ml-2 text-green-600 text-sm">
+                              Copied!
+                            </span>
+                          )}
                         </div>
                       </div>
                     )}
@@ -1275,16 +1748,11 @@ export default function IssuerPage() {
                     <Button
                       onClick={handleUploadToIPFS}
                       disabled={
-                        !certificateFile ||
-                        isUploadingToIPFS ||
-                        ipfsHash ||
-                        pinataAuthenticated === false
+                        !certificateFile || isUploadingToIPFS || ipfsHash
                       }
                       className="w-full">
                       {isUploadingToIPFS
                         ? "Uploading to IPFS..."
-                        : pinataAuthenticated === false
-                        ? "Pinata Connection Failed"
                         : "Upload to IPFS"}
                     </Button>
                   </div>
@@ -1316,26 +1784,7 @@ export default function IssuerPage() {
                             required
                           />
                         </div>
-                        <div>
-                          <label
-                            htmlFor="certificateType"
-                            className="block text-sm font-medium text-gray-700 mb-1">
-                            Certificate Type
-                          </label>
-                          <select
-                            id="certificateType"
-                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-blue"
-                            value={certificateType}
-                            onChange={(e) => setCertificateType(e.target.value)}
-                            required>
-                            <option value="degree">Degree</option>
-                            <option value="diploma">Diploma</option>
-                            <option value="course">Course Completion</option>
-                            <option value="certification">
-                              Professional Certification
-                            </option>
-                          </select>
-                        </div>
+
                         <div>
                           <label
                             htmlFor="completionDate"
@@ -1361,7 +1810,7 @@ export default function IssuerPage() {
                             type="text"
                             id="certificateName"
                             className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-blue"
-                            placeholder="e.g., Bachelor of Science in Computer Science"
+                            placeholder="e.g., Bachelor of Computer Science"
                             value={certificateName}
                             onChange={(e) => setCertificateName(e.target.value)}
                             required
@@ -1369,19 +1818,18 @@ export default function IssuerPage() {
                         </div>
                         <div className="md:col-span-2">
                           <label
-                            htmlFor="additionalDetails"
+                            htmlFor="institutionName"
                             className="block text-sm font-medium text-gray-700 mb-1">
-                            Additional Details (Optional)
+                            Institution
                           </label>
-                          <textarea
-                            id="additionalDetails"
-                            rows="4"
+                          <input
+                            type="text"
+                            id="institutionName"
                             className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-blue"
-                            placeholder="Enter any additional information to include in the certificate..."
-                            value={additionalDetails}
-                            onChange={(e) =>
-                              setAdditionalDetails(e.target.value)
-                            }
+                            placeholder="e.g., Multimedia University"
+                            value={institutionName}
+                            onChange={(e) => setInstitutionName(e.target.value)}
+                            required
                           />
                         </div>
                         <div className="md:col-span-2">
@@ -1431,7 +1879,7 @@ export default function IssuerPage() {
                       network.
                     </p>
 
-                    <div className="space-y-4 text-gray-600 text-sm">
+                    <div className="space-y-4 text-gray-600">
                       <div className="flex items-start">
                         <svg
                           xmlns="http://www.w3.org/2000/svg"
@@ -1468,8 +1916,8 @@ export default function IssuerPage() {
                         <div>
                           <p className="font-medium">Supported Formats</p>
                           <p>
-                            We support various file formats, including PDF, JPG,
-                            PNG, and Blockcerts JSON.
+                            We support various file formats, including PDF,
+                            JPG,and PNG.
                           </p>
                         </div>
                       </div>
@@ -1498,31 +1946,54 @@ export default function IssuerPage() {
                     </div>
                   </div>
 
-                  <div className="bg-white rounded-lg shadow-sm p-6">
+                  <div className="bg-white rounded-lg shadow-sm p-6 mb-8">
                     <h2 className="text-xl font-semibold mb-4">
-                      Blockchain Issuance
+                      Digital Certificate Process
                     </h2>
                     <p className="text-gray-600 mb-4">
-                      When you issue a certificate, the following happens behind
-                      the scenes:
+                      When you issue a certificate, the following happens:
                     </p>
 
-                    <ol className="list-decimal list-inside space-y-3 text-gray-600">
-                      <li>Certificate file is uploaded to IPFS</li>
-                      <li>An IPFS hash is generated for the file</li>
-                      <li>The hash is recorded on the blockchain</li>
-                      <li>A Blockcerts-compliant credential is created</li>
-                      <li>The certificate is linked to the holder's wallet</li>
+                    <ol className="list-decimal list-inside space-y-4 text-gray-600">
+                      <li>
+                        Certificate file is uploaded to IPFS for decentralized
+                        storage
+                      </li>
+                      <li>A unique IPFS hash is generated for the file</li>
+                      <li>The certificate record is created in the system</li>
+                      <li>
+                        The certificate is linked to the holder's wallet address
+                      </li>
+                      <li>
+                        The certificate becomes verifiable via the IPFS hash
+                      </li>
                     </ol>
+                  </div>
 
-                    <div className="mt-8 p-4 bg-yellow-50 rounded-md">
-                      <h3 className="text-yellow-700 font-medium mb-2">
-                        Important Note
-                      </h3>
-                      <p className="text-sm text-gray-600">
-                        Once issued, certificates cannot be modified. Ensure all
-                        information is correct before issuing.
-                      </p>
+                  <div className="bg-white rounded-lg shadow-sm p-6">
+                    <div className="flex items-start p-4 bg-red-50 border border-red-200 rounded-lg">
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        className="h-6 w-6 text-red-600 mr-3 mt-0.5 flex-shrink-0"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor">
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 15.5c-.77.833.192 2.5 1.732 2.5z"
+                        />
+                      </svg>
+                      <div>
+                        <h3 className="text-red-800 font-semibold mb-2">
+                          ⚠️ Important Notice
+                        </h3>
+                        <p className="text-red-700 font-medium">
+                          Once issued, certificates cannot be modified. Ensure
+                          all information is correct before issuing.
+                        </p>
+                      </div>
                     </div>
                   </div>
                 </div>
