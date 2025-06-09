@@ -1,6 +1,8 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  // Enable standalone output for Docker deployments
+  output: "standalone",
 
   webpack: (config, { isServer }) => {
     // Fix for "Module not found: Can't resolve 'fs'" error when using Pinata SDK
