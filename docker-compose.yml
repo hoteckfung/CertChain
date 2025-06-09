@@ -1,0 +1,70 @@
+# Docker Compose file for CertChain
+
+services:
+  # MySQL Database
+  mysql:
+    image: mysql:8.0
+    container_name: certchain-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: mysql
+      MYSQL_DATABASE: certchain
+      MYSQL_USER: certchain_user
+      MYSQL_PASSWORD: certchain_password
+    ports:
+      - "3307:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./scripts/certchain.session.sql:/docker-entrypoint-initdb.d/01-schema.sql
+      - ./scripts/create-activity-table.sql:/docker-entrypoint-initdb.d/02-activity-table.sql
+    networks:
+      - certchain-network
+
+  # Next.js Application
+  webapp:
+    build: 
+      context: .
+      dockerfile: Dockerfile
+    container_name: certchain-app
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    env_file:
+      - .env.local
+    environment:
+      - NODE_ENV=production
+      - MYSQL_HOST=mysql
+      - MYSQL_PORT=3306
+      - MYSQL_USER=certchain_user
+      - MYSQL_PASSWORD=certchain_password
+      - MYSQL_DATABASE=certchain
+    depends_on:
+      - mysql
+    networks:
+      - certchain-network
+    volumes:
+      - ./.env.local:/app/.env.local
+
+  # Optional: phpMyAdmin for database management
+  phpmyadmin:
+    image: phpmyadmin/phpmyadmin:latest
+    container_name: certchain-phpmyadmin
+    restart: unless-stopped
+    ports:
+      - "8080:80"
+    environment:
+      PMA_HOST: mysql
+      PMA_PORT: 3306
+      PMA_USER: root
+      PMA_PASSWORD: mysql
+    depends_on:
+      - mysql
+    networks:
+      - certchain-network
+
+volumes:
+  mysql_data:
+
+networks:
+  certchain-network:
+    driver: bridge 
