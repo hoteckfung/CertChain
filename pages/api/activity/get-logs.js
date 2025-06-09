@@ -120,8 +120,14 @@ export default async function handler(req, res) {
           ? log.created_at
           : dateObj.toISOString();
       } else {
-        // Fallback to current timestamp
-        created_at = new Date().toISOString();
+        // Handle invalid/missing created_at without corrupting data
+        console.warn(
+          `Invalid created_at format for log ${log.id}:`,
+          typeof log.created_at,
+          log.created_at
+        );
+        // Keep original value or set to null to indicate invalid data
+        created_at = log.created_at || null;
       }
 
       return {
