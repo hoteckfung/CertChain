@@ -75,8 +75,9 @@ export default async function handler(req, res) {
       if (phone_number && phone_number.length > 0) {
         // Remove all spaces, hyphens, and parentheses for validation
         const cleanedPhone = phone_number.replace(/[\s\-\(\)]/g, "");
-        // Allow + followed by 7-15 digits, first digit can be 0-9
-        if (!/^[\+]?[0-9]{7,15}$/.test(cleanedPhone)) {
+        // Allow + followed by 7-15 digits, first digit must be 1-9 (no leading zeros)
+        // Pattern: optional +, then 1-9, then 6-14 more digits (total 7-15 digits)
+        if (!/^(\+[1-9][0-9]{6,14}|[1-9][0-9]{6,14})$/.test(cleanedPhone)) {
           return res.status(400).json({ error: "Invalid phone number format" });
         }
       }

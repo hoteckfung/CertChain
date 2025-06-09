@@ -87,12 +87,49 @@ export default async function handler(req, res) {
       [...queryParams, parseInt(limit), offset]
     );
 
-    // Parse metadata JSON
-    const processedLogs = logs.map((log) => ({
-      ...log,
-      metadata: log.metadata ? JSON.parse(log.metadata) : {},
-      created_at: log.created_at.toISOString(),
-    }));
+    // Parse metadata JSON with error handling
+    const processedLogs = logs.map((log) => {
+      let metadata = {};
+
+      // Handle metadata parsing safely
+      if (log.metadata) {
+        if (typeof log.metadata === "string") {
+          try {
+            metadata = JSON.parse(log.metadata);
+          } catch (error) {
+            console.warn(
+              `Failed to parse metadata for log ${log.id}:`,
+              error.message
+            );
+            metadata = {};
+          }
+        } else if (typeof log.metadata === "object") {
+          // Already parsed by MySQL driver
+          metadata = log.metadata;
+        }
+      }
+
+      // Handle date conversion safely
+      let created_at;
+      if (log.created_at instanceof Date) {
+        created_at = log.created_at.toISOString();
+      } else if (typeof log.created_at === "string") {
+        // Try to parse as date string
+        const dateObj = new Date(log.created_at);
+        created_at = isNaN(dateObj.getTime())
+          ? log.created_at
+          : dateObj.toISOString();
+      } else {
+        // Fallback to current timestamp
+        created_at = new Date().toISOString();
+      }
+
+      return {
+        ...log,
+        metadata,
+        created_at,
+      };
+    });
 
     await connection.end();
 
