@@ -27,6 +27,7 @@ import {
   ResponsiveContainer,
 } from "recharts";
 import { Database } from "lucide-react";
+import ActivityLogViewer from "../components/ActivityLogViewer";
 
 export default function AdminPage() {
   // State for active tab
@@ -85,49 +86,7 @@ export default function AdminPage() {
     },
   ]);
 
-  // State for activity logs
-  const [activityLogs, setActivityLogs] = useState([
-    {
-      id: 1,
-      type: "Certificate Issued",
-      user: "0x1234...5678",
-      target: "0xaaaa...bbbb",
-      timestamp: "2023-08-15T10:30:00",
-      details: "Blockchain Development Certificate",
-    },
-    {
-      id: 2,
-      type: "Issuer Added",
-      user: "Admin",
-      target: "0x8765...4321",
-      timestamp: "2023-06-15T09:15:00",
-      details: "Tech Institute added as issuer",
-    },
-    {
-      id: 3,
-      type: "Certificate Verified",
-      user: "Anonymous",
-      target: "Certificate #12345",
-      timestamp: "2023-08-14T14:45:00",
-      details: "Verification successful",
-    },
-    {
-      id: 4,
-      type: "Certificate Issued",
-      user: "0x8765...4321",
-      target: "0xcccc...dddd",
-      timestamp: "2023-08-10T11:20:00",
-      details: "Smart Contract Development Certificate",
-    },
-    {
-      id: 5,
-      type: "Issuer Removed",
-      user: "Admin",
-      target: "0xabcd...efgh",
-      timestamp: "2023-08-01T16:30:00",
-      details: "Digital Academy removed as issuer",
-    },
-  ]);
+  // Note: Activity logs are now handled by the ActivityLogViewer component
 
   // State for new issuer form
   const [newIssuer, setNewIssuer] = useState({ address: "", name: "" });
@@ -148,17 +107,7 @@ export default function AdminPage() {
 
     setIssuers([...issuers, issuer]);
 
-    // Add to activity logs
-    const activityLog = {
-      id: activityLogs.length + 1,
-      type: "Issuer Added",
-      user: "Admin",
-      target: newIssuer.address,
-      timestamp: new Date().toISOString(),
-      details: `${newIssuer.name} added as issuer`,
-    };
-
-    setActivityLogs([activityLog, ...activityLogs]);
+    // Activity logging is now handled by API calls and the ActivityLogViewer component
 
     // Reset form
     setNewIssuer({ address: "", name: "" });
@@ -174,17 +123,7 @@ export default function AdminPage() {
 
     setIssuers(updatedIssuers);
 
-    // Add to activity logs
-    const activityLog = {
-      id: activityLogs.length + 1,
-      type: "Issuer Removed",
-      user: "Admin",
-      target: issuerToRemove.address,
-      timestamp: new Date().toISOString(),
-      details: `${issuerToRemove.name} removed as issuer`,
-    };
-
-    setActivityLogs([activityLog, ...activityLogs]);
+    // Activity logging is now handled by API calls and the ActivityLogViewer component
   };
 
   // Format timestamp
@@ -396,73 +335,7 @@ export default function AdminPage() {
                 {activeTab === "activity" && (
                   <div className="bg-white rounded-lg shadow-sm p-6">
                     <h2 className="text-xl font-semibold mb-4">Activity Log</h2>
-                    <div className="space-y-4">
-                      {activityLogs.map((log) => (
-                        <div
-                          key={log.id}
-                          className="border-b border-gray-100 pb-4 last:border-0 last:pb-0">
-                          <div className="flex items-start">
-                            <div
-                              className={`flex-shrink-0 h-8 w-8 rounded-full flex items-center justify-center text-white ${
-                                log.type.includes("Certificate Issued")
-                                  ? "bg-green-500"
-                                  : log.type.includes("Issuer Added")
-                                  ? "bg-blue-500"
-                                  : log.type.includes("Issuer Removed")
-                                  ? "bg-red-500"
-                                  : "bg-gray-500"
-                              }`}>
-                              <svg
-                                xmlns="http://www.w3.org/2000/svg"
-                                className="h-4 w-4"
-                                viewBox="0 0 24 24"
-                                fill="none"
-                                stroke="currentColor"
-                                strokeWidth="2"
-                                strokeLinecap="round"
-                                strokeLinejoin="round">
-                                {log.type.includes("Certificate") ? (
-                                  <>
-                                    <polyline points="9 11 12 14 22 4"></polyline>
-                                    <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path>
-                                  </>
-                                ) : log.type.includes("Added") ? (
-                                  <>
-                                    <circle cx="12" cy="12" r="10"></circle>
-                                    <line x1="12" y1="8" x2="12" y2="16"></line>
-                                    <line x1="8" y1="12" x2="16" y2="12"></line>
-                                  </>
-                                ) : (
-                                  <>
-                                    <circle cx="12" cy="12" r="10"></circle>
-                                    <line x1="8" y1="12" x2="16" y2="12"></line>
-                                  </>
-                                )}
-                              </svg>
-                            </div>
-                            <div className="ml-3 flex-1">
-                              <p className="text-sm font-medium text-gray-900">
-                                {log.type}
-                              </p>
-                              <div className="mt-1 text-sm text-gray-500">
-                                <p>{log.details}</p>
-                                <div className="mt-1 flex text-xs text-gray-400">
-                                  <p>{formatTimestamp(log.timestamp)}</p>
-                                  <span className="mx-1">•</span>
-                                  <p>User: {log.user}</p>
-                                  {log.target && (
-                                    <>
-                                      <span className="mx-1">•</span>
-                                      <p>Target: {log.target}</p>
-                                    </>
-                                  )}
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
+                    <ActivityLogViewer />
                   </div>
                 )}
 
@@ -568,41 +441,29 @@ export default function AdminPage() {
                     <div className="space-y-4">
                       <div className="bg-gray-50 p-4 rounded">
                         <p className="text-sm text-gray-500 mb-1">
-                          Total Activities
+                          Activity Overview
                         </p>
-                        <p className="text-2xl font-bold">
-                          {activityLogs.length}
+                        <p className="text-sm text-gray-600">
+                          View detailed activity logs in the Activity Log tab
                         </p>
                       </div>
                       <div className="space-y-2">
                         <div className="flex justify-between items-center">
                           <p className="text-sm">Certificate Issuance</p>
                           <span className="px-2 py-1 text-xs font-medium rounded-full bg-green-100 text-green-800">
-                            {
-                              activityLogs.filter(
-                                (log) => log.type === "Certificate Issued"
-                              ).length
-                            }
+                            Live Data
                           </span>
                         </div>
                         <div className="flex justify-between items-center">
                           <p className="text-sm">Certificate Verification</p>
                           <span className="px-2 py-1 text-xs font-medium rounded-full bg-blue-100 text-blue-800">
-                            {
-                              activityLogs.filter(
-                                (log) => log.type === "Certificate Verified"
-                              ).length
-                            }
+                            Real-time
                           </span>
                         </div>
                         <div className="flex justify-between items-center">
-                          <p className="text-sm">Issuer Management</p>
+                          <p className="text-sm">User Management</p>
                           <span className="px-2 py-1 text-xs font-medium rounded-full bg-purple-100 text-purple-800">
-                            {
-                              activityLogs.filter((log) =>
-                                log.type.includes("Issuer")
-                              ).length
-                            }
+                            Blockchain
                           </span>
                         </div>
                       </div>

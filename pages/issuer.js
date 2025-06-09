@@ -14,6 +14,12 @@ import useNotification from "../utils/useNotification";
 import Notification from "../components/Notification";
 import SignaturePad from "../components/SignaturePad";
 import DraggableElement from "../components/DraggableElement";
+import {
+  connectWallet,
+  issueCertificateOnChain,
+  getUserCertificates,
+  checkIssuerRole,
+} from "../utils/contract";
 
 export default function IssuerPage() {
   // Notification state
@@ -38,7 +44,6 @@ export default function IssuerPage() {
 
   // Form states for certificate generation
   const [recipientName, setRecipientName] = useState("");
-  const [recipientEmail, setRecipientEmail] = useState("");
   const [certificateTitle, setCertificateTitle] = useState("");
   const [issuerName, setIssuerName] = useState("");
   const [issueDate, setIssueDate] = useState(
@@ -403,46 +408,176 @@ export default function IssuerPage() {
     }
   };
 
-  // Issue certificate
-  const handleIssueCertificate = (e) => {
+  // Handle certificate issuance
+  const handleIssueCertificate = async (e) => {
     e.preventDefault();
 
-    if (
-      !holderAddress ||
-      !certificateName ||
-      !completionDate ||
-      !institutionName
-    ) {
-      showWarning("Please fill in all required fields");
+    // Validate required fields
+    if (!holderAddress || !ipfsHash || !certificateName || !institutionName) {
+      showError("Please fill in all required fields and upload a file to IPFS");
       return;
     }
 
-    if (!ipfsHash) {
-      showWarning("Please upload a certificate file to IPFS first");
+    // Validate Ethereum address format
+    if (!/^0x[a-fA-F0-9]{40}$/.test(holderAddress)) {
+      showError("Please enter a valid Ethereum address (e.g., 0x123...)");
       return;
     }
 
     setIssuingCertificate(true);
 
-    // Simulate certificate issuance (would interact with blockchain in production)
-    setTimeout(() => {
+    try {
+      showInfo("Checking blockchain connection...");
+
+      // Check if wallet is connected
+      if (!window.ethereum) {
+        throw new Error(
+          "MetaMask not detected. Please install MetaMask to continue."
+        );
+      }
+
+      // Check if we're connected to the right network
+      const chainId = await window.ethereum.request({ method: "eth_chainId" });
+      const expectedChainId = process.env.NEXT_PUBLIC_CHAIN_ID || "1337";
+      const expectedChainIdHex = `0x${parseInt(expectedChainId).toString(16)}`;
+
+      if (chainId !== expectedChainIdHex) {
+        throw new Error(
+          `Please switch to the correct network. Expected Chain ID: ${expectedChainId} (0x${parseInt(
+            expectedChainId
+          ).toString(16)}), Current: ${chainId}`
+        );
+      }
+
+      // Check if contract address is configured
+      const contractAddress = process.env.NEXT_PUBLIC_CONTRACT_ADDRESS;
+      if (
+        !contractAddress ||
+        contractAddress === "0x..." ||
+        contractAddress.length !== 42
+      ) {
+        throw new Error(
+          "Contract address not configured. Please deploy the contract and update your .env.local file."
+        );
+      }
+
+      // Get current account
+      const accounts = await window.ethereum.request({
+        method: "eth_accounts",
+      });
+      if (accounts.length === 0) {
+        throw new Error(
+          "No wallet account connected. Please connect your wallet first."
+        );
+      }
+
+      const currentAccount = accounts[0];
+      console.log("Current account:", currentAccount);
+      console.log("Contract address:", contractAddress);
+      console.log("Chain ID:", chainId);
+
+      // Check account balance
+      const balance = await window.ethereum.request({
+        method: "eth_getBalance",
+        params: [currentAccount, "latest"],
+      });
+      const balanceInEth = parseInt(balance, 16) / Math.pow(10, 18);
+      console.log("Account balance:", balanceInEth, "ETH");
+
+      if (balanceInEth < 0.001) {
+        throw new Error(
+          "Insufficient ETH balance for transaction. Please ensure your account has at least 0.001 ETH for gas fees."
+        );
+      }
+
+      showInfo("Validating issuer permissions...");
+
+      // Check if current account has issuer role
+      try {
+        const { checkIssuerRole } = await import("../utils/contract");
+        const hasIssuerRole = await checkIssuerRole(currentAccount);
+
+        if (!hasIssuerRole) {
+          console.warn(
+            "Account may not have issuer role. Attempting to issue anyway..."
+          );
+          showInfo(
+            "Note: Your account may not have issuer permissions. If this fails, contact the contract admin."
+          );
+        }
+      } catch (roleCheckError) {
+        console.warn("Could not verify issuer role:", roleCheckError);
+        showInfo(
+          "Could not verify permissions. Attempting to issue certificate..."
+        );
+      }
+
+      showInfo("Issuing certificate on blockchain...");
+
+      // Issue certificate on blockchain with detailed logging
+      console.log("Issuing certificate with parameters:", {
+        recipientAddress: holderAddress,
+        ipfsHash: ipfsHash,
+        certificateType: "Certificate",
+        recipientName: "New Recipient",
+        issuerName: institutionName,
+      });
+
+      const result = await issueCertificateOnChain({
+        recipientAddress: holderAddress,
+        ipfsHash: ipfsHash,
+        certificateType: "Certificate",
+        recipientName: "New Recipient", // You could add a field for this
+        issuerName: institutionName,
+      });
+
+      console.log("Blockchain result:", result);
+
+      if (!result.success) {
+        // Provide more specific error messages
+        let errorMessage =
+          result.error || "Failed to issue certificate on blockchain";
+
+        if (errorMessage.includes("missing revert data")) {
+          errorMessage =
+            "Transaction failed. This could be due to:\n" +
+            "1. Account doesn't have ISSUER role\n" +
+            "2. Contract is paused\n" +
+            "3. Invalid parameters\n" +
+            "4. Network connection issues\n\n" +
+            "Original error: " +
+            errorMessage;
+        } else if (errorMessage.includes("insufficient funds")) {
+          errorMessage =
+            "Insufficient ETH for gas fees. Please add more ETH to your wallet.";
+        } else if (errorMessage.includes("user rejected")) {
+          errorMessage =
+            "Transaction was rejected in MetaMask. Please try again and approve the transaction.";
+        } else if (errorMessage.includes("execution reverted")) {
+          errorMessage =
+            "Smart contract rejected the transaction. You may not have issuer permissions or the contract may be paused.";
+        }
+
+        throw new Error(errorMessage);
+      }
+
       const newCertificate = {
-        id: `cert-${Math.floor(Math.random() * 1000)
-          .toString()
-          .padStart(3, "0")}`,
+        id: `cert-${result.tokenId}`,
         holder: holderAddress,
-        name: "New Recipient", // In real app, would be fetched from database
+        name: "New Recipient",
         type: "Certificate",
         title: certificateName,
         issueDate: completionDate,
         status: "Issued",
         institution: institutionName,
-        details: "Certificate issued successfully",
+        details: "Certificate issued successfully on blockchain",
         hash: ipfsHash,
+        tokenId: result.tokenId,
+        transactionHash: result.transactionHash,
+        blockNumber: result.blockNumber,
       };
 
       setIssuedCertificates([newCertificate, ...issuedCertificates]);
-      setIssuingCertificate(false);
 
       // Clear form
       setHolderAddress("");
@@ -461,8 +596,15 @@ export default function IssuerPage() {
         JSON.stringify([newCertificate, ...storedCertificates])
       );
 
-      showSuccess("Certificate issued successfully!");
-    }, 2000);
+      showSuccess(
+        `Certificate issued successfully! Token ID: ${result.tokenId}, Transaction: ${result.transactionHash}`
+      );
+    } catch (error) {
+      console.error("Error issuing certificate:", error);
+      showError(`Failed to issue certificate: ${error.message}`);
+    } finally {
+      setIssuingCertificate(false);
+    }
   };
 
   // View certificate details
@@ -870,6 +1012,59 @@ export default function IssuerPage() {
     setIsEditMode(!isEditMode);
   };
 
+  // Blockchain-related state
+  const [walletConnected, setWalletConnected] = useState(false);
+  const [walletAddress, setWalletAddress] = useState("");
+  const [isConnectingWallet, setIsConnectingWallet] = useState(false);
+  const [contractAddress, setContractAddress] = useState("");
+
+  // Check if wallet is connected on component mount
+  useEffect(() => {
+    checkWalletConnection();
+    loadContractAddress();
+  }, []);
+
+  const checkWalletConnection = async () => {
+    if (typeof window !== "undefined" && window.ethereum) {
+      try {
+        const accounts = await window.ethereum.request({
+          method: "eth_accounts",
+        });
+        if (accounts.length > 0) {
+          setWalletConnected(true);
+          setWalletAddress(accounts[0]);
+        }
+      } catch (error) {
+        console.error("Error checking wallet connection:", error);
+      }
+    }
+  };
+
+  const loadContractAddress = () => {
+    const address = process.env.NEXT_PUBLIC_CONTRACT_ADDRESS;
+    if (address && address !== "0x...") {
+      setContractAddress(address);
+    }
+  };
+
+  const handleConnectWallet = async () => {
+    setIsConnectingWallet(true);
+    try {
+      const result = await connectWallet();
+      if (result.success) {
+        setWalletConnected(true);
+        setWalletAddress(result.address);
+        showSuccess("Wallet connected successfully!");
+      } else {
+        showError(result.error || "Failed to connect wallet");
+      }
+    } catch (error) {
+      showError("Error connecting wallet: " + error.message);
+    } finally {
+      setIsConnectingWallet(false);
+    }
+  };
+
   return (
     <ProtectedRoute allowedRoles={["issuer"]}>
       <div className="min-h-screen flex flex-col">
@@ -900,6 +1095,90 @@ export default function IssuerPage() {
               <div className="text-sm text-gray-500">
                 Logged in as <span className="font-medium">Issuer</span>
               </div>
+            </div>
+
+            {/* Blockchain Status Section */}
+            <div className="bg-white rounded-lg shadow-sm p-6 mb-8">
+              <h2 className="text-lg font-semibold mb-4 flex items-center">
+                🔗 Blockchain Status
+              </h2>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {/* Wallet Connection */}
+                <div className="flex items-center justify-between p-4 border rounded-lg">
+                  <div>
+                    <p className="text-sm text-gray-600">Wallet</p>
+                    <p
+                      className={`font-medium ${
+                        walletConnected ? "text-green-600" : "text-red-600"
+                      }`}>
+                      {walletConnected ? "Connected" : "Not Connected"}
+                    </p>
+                    {walletConnected && walletAddress && (
+                      <p className="text-xs text-gray-500 mt-1">
+                        {walletAddress.slice(0, 6)}...{walletAddress.slice(-4)}
+                      </p>
+                    )}
+                  </div>
+                  {!walletConnected && (
+                    <button
+                      onClick={handleConnectWallet}
+                      disabled={isConnectingWallet}
+                      className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-blue-700 disabled:opacity-50">
+                      {isConnectingWallet ? "Connecting..." : "Connect Wallet"}
+                    </button>
+                  )}
+                </div>
+
+                {/* Contract Status */}
+                <div className="flex items-center justify-between p-4 border rounded-lg">
+                  <div>
+                    <p className="text-sm text-gray-600">Smart Contract</p>
+                    <p
+                      className={`font-medium ${
+                        contractAddress && contractAddress !== "0x..."
+                          ? "text-green-600"
+                          : "text-yellow-600"
+                      }`}>
+                      {contractAddress && contractAddress !== "0x..."
+                        ? "Deployed"
+                        : "Not Deployed"}
+                    </p>
+                    {contractAddress && contractAddress !== "0x..." && (
+                      <p className="text-xs text-gray-500 mt-1">
+                        {contractAddress.slice(0, 6)}...
+                        {contractAddress.slice(-4)}
+                      </p>
+                    )}
+                  </div>
+                </div>
+
+                {/* Network Info */}
+                <div className="flex items-center justify-between p-4 border rounded-lg">
+                  <div>
+                    <p className="text-sm text-gray-600">Network</p>
+                    <p className="font-medium text-blue-600">
+                      {process.env.NEXT_PUBLIC_CHAIN_ID === "31337"
+                        ? "Local Hardhat"
+                        : process.env.NEXT_PUBLIC_CHAIN_ID === "11155111"
+                        ? "Sepolia Testnet"
+                        : "Ethereum"}
+                    </p>
+                    <p className="text-xs text-gray-500 mt-1">
+                      Chain ID: {process.env.NEXT_PUBLIC_CHAIN_ID || "31337"}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {(!contractAddress || contractAddress === "0x...") && (
+                <div className="mt-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                  <p className="text-yellow-800 text-sm">
+                    ⚠️ <strong>Smart contract not deployed.</strong> Please
+                    deploy your CertificateNFT contract and update the
+                    NEXT_PUBLIC_CONTRACT_ADDRESS environment variable.
+                  </p>
+                </div>
+              )}
             </div>
 
             {/* Dashboard Tabs */}
@@ -2042,13 +2321,13 @@ export default function IssuerPage() {
                           Holder
                         </th>
                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Type
-                        </th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                           Title
                         </th>
                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                           Date Issued
+                        </th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Blockchain Status
                         </th>
                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                           IPFS Hash
@@ -2070,18 +2349,41 @@ export default function IssuerPage() {
                                 {cert.name}
                               </div>
                               <div className="ml-2 text-xs text-gray-500">
-                                ({cert.holder})
+                                ({cert.holder.slice(0, 6)}...
+                                {cert.holder.slice(-4)})
                               </div>
                             </div>
-                          </td>
-                          <td className="px-4 py-3 whitespace-nowrap">
-                            {cert.type}
                           </td>
                           <td className="px-4 py-3 whitespace-nowrap">
                             {cert.title}
                           </td>
                           <td className="px-4 py-3 whitespace-nowrap">
                             {cert.issueDate}
+                          </td>
+                          <td className="px-4 py-3 whitespace-nowrap">
+                            {cert.tokenId ? (
+                              <div className="flex flex-col">
+                                <span className="text-green-600 font-medium text-sm">
+                                  ✅ On Blockchain
+                                </span>
+                                <span className="text-xs text-gray-500">
+                                  Token ID: {cert.tokenId}
+                                </span>
+                                {cert.transactionHash && (
+                                  <a
+                                    href={`https://sepolia.etherscan.io/tx/${cert.transactionHash}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-xs text-blue-600 hover:text-blue-800">
+                                    View Transaction
+                                  </a>
+                                )}
+                              </div>
+                            ) : (
+                              <span className="text-yellow-600 font-medium text-sm">
+                                ⏳ Legacy Certificate
+                              </span>
+                            )}
                           </td>
                           <td className="px-4 py-3 whitespace-nowrap font-mono text-xs">
                             <div className="flex items-center">
@@ -2113,6 +2415,18 @@ export default function IssuerPage() {
                               className="text-primary-blue hover:text-blue-800 mr-3">
                               View
                             </button>
+                            {cert.tokenId && (
+                              <button
+                                onClick={() =>
+                                  window.open(
+                                    `/verify?tokenId=${cert.tokenId}`,
+                                    "_blank"
+                                  )
+                                }
+                                className="text-green-600 hover:text-green-800 mr-3">
+                                Verify
+                              </button>
+                            )}
                             <button className="text-gray-600 hover:text-gray-900">
                               Download
                             </button>

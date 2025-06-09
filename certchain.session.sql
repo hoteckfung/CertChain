@@ -145,4 +145,4 @@ VALUES (
 -- Create indexes for better performance
 CREATE INDEX idx_user_role_active ON users(role, is_active);
 CREATE INDEX idx_activity_user_date ON activity_logs(user_id, created_at);
-CREATE INDEX idx_certificates_status_date ON certificates(status, created_at);
+CREATE INDEX idx_certificates_status_date ON certificates(status, created_at); 
