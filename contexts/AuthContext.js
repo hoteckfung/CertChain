@@ -13,17 +13,23 @@ import {
   handleAccountChange,
   handleChainChange,
 } from "../utils/wallet";
+import {
+  checkIssuerRole,
+  checkAdminRole,
+  checkVerifierRole,
+} from "../utils/contract";
 
-// Enhanced AuthContext with real-time role verification and caching
+// Enhanced AuthContext with blockchain-first authentication
 const AuthContext = createContext();
 
 // Public routes that don't require authentication
 const publicRoutes = ["/verify", "/", "/login"];
 
-// Role-based route access
+// Role-based route access (now based on blockchain roles)
 const roleRoutes = {
   admin: ["/admin", "/issuer", "/holder"],
   issuer: ["/issuer", "/holder"],
+  verifier: ["/verify", "/holder"],
   holder: ["/holder"],
 };
 
@@ -40,146 +46,221 @@ export function AuthProvider({ children }) {
   const chainChangeListenerRef = useRef(null);
   const roleVerificationIntervalRef = useRef(null);
 
-  // Role verification with caching (every 5 minutes)
-  const verifyUserRole = useCallback(
-    async (force = false) => {
-      if (!user?.walletAddress) return null;
+  // Blockchain-first role verification
+  const verifyUserRoleOnChain = useCallback(
+    async (walletAddress, force = false) => {
+      if (!walletAddress) return null;
 
       const now = Date.now();
-      const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
+      const CACHE_DURATION = 2 * 60 * 1000; // 2 minutes for blockchain roles
 
       // Use cached data if still valid and not forced
       if (
         !force &&
         roleVerificationCache &&
         lastVerification &&
-        now - lastVerification < CACHE_DURATION
+        now - lastVerification < CACHE_DURATION &&
+        roleVerificationCache.walletAddress === walletAddress
       ) {
         return roleVerificationCache;
       }
 
       try {
-        const response = await fetch("/api/auth/verify-role", {
-          method: "GET",
-          credentials: "include",
-        });
+        console.log("🔍 Verifying blockchain roles for:", walletAddress);
 
-        if (!response.ok) {
-          throw new Error("Role verification failed");
+        // Check all roles on blockchain
+        const [adminResult, issuerResult, verifierResult] =
+          await Promise.allSettled([
+            checkAdminRole(walletAddress),
+            checkIssuerRole(walletAddress),
+            checkVerifierRole(walletAddress),
+          ]);
+
+        const isAdmin =
+          adminResult.status === "fulfilled" &&
+          adminResult.value.success &&
+          adminResult.value.isAdmin;
+        const isIssuer =
+          issuerResult.status === "fulfilled" &&
+          issuerResult.value.success &&
+          issuerResult.value.isIssuer;
+        const isVerifier =
+          verifierResult.status === "fulfilled" &&
+          verifierResult.value.success &&
+          verifierResult.value.isVerifier;
+
+        // Determine primary role (hierarchy: admin > issuer > verifier > holder)
+        let primaryRole = "holder"; // Default role
+        let redirectTo = "/holder";
+
+        if (isAdmin) {
+          primaryRole = "admin";
+          redirectTo = "/admin";
+        } else if (isIssuer) {
+          primaryRole = "issuer";
+          redirectTo = "/issuer";
+        } else if (isVerifier) {
+          primaryRole = "verifier";
+          redirectTo = "/verify";
         }
 
-        const data = await response.json();
+        const roleData = {
+          walletAddress,
+          roles: {
+            isAdmin,
+            isIssuer,
+            isVerifier,
+            isHolder: true, // Everyone is a holder
+          },
+          primaryRole,
+          redirectTo,
+          authenticated: true,
+        };
 
-        if (data.authenticated) {
-          setRoleVerificationCache(data);
-          setLastVerification(now);
+        setRoleVerificationCache(roleData);
+        setLastVerification(now);
 
-          // Update user data if role has changed
-          if (user && data.user.role !== user.role) {
-            console.log("Role change detected, updating user data");
-            setUser((prev) => ({
-              ...prev,
-              ...data.user,
-            }));
-
-            // Redirect to appropriate route for new role
-            const newRoleRoute = data.redirectTo;
-            if (newRoleRoute && router.pathname !== newRoleRoute) {
-              router.push(newRoleRoute);
-            }
-          }
-
-          return data;
-        } else {
-          // User is no longer authenticated
-          setUser(null);
-          setRoleVerificationCache(null);
-          setLastVerification(null);
-
-          if (!publicRoutes.includes(router.pathname)) {
-            router.push("/login");
-          }
-          return null;
-        }
+        console.log("✅ Blockchain roles verified:", roleData);
+        return roleData;
       } catch (error) {
-        console.error("Role verification error:", error);
-        return roleVerificationCache; // Return cached data on error
+        console.error("❌ Blockchain role verification error:", error);
+
+        // On error, return cached data or default to holder
+        if (
+          roleVerificationCache &&
+          roleVerificationCache.walletAddress === walletAddress
+        ) {
+          return roleVerificationCache;
+        }
+
+        return {
+          walletAddress,
+          roles: {
+            isAdmin: false,
+            isIssuer: false,
+            isVerifier: false,
+            isHolder: true,
+          },
+          primaryRole: "holder",
+          redirectTo: "/holder",
+          authenticated: true,
+          error: error.message,
+        };
       }
     },
-    [user, roleVerificationCache, lastVerification, router]
+    [roleVerificationCache, lastVerification]
   );
 
-  // Simplified user data loading - just try login API
-  const loadUserData = useCallback(async (address) => {
-    try {
-      setLoading(true);
-      setError(null);
+  // Load user data with blockchain-first approach
+  const loadUserData = useCallback(
+    async (address) => {
+      try {
+        setLoading(true);
+        setError(null);
 
-      const response = await fetch("/api/auth/login", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ walletAddress: address }),
-        credentials: "include",
-      });
+        console.log("🔗 Loading user data for wallet:", address);
 
-      if (response.ok) {
-        const data = await response.json();
-        if (data.success && data.user) {
-          const userData = {
-            ...data.user,
-            walletAddress: address,
-          };
+        // 1. Verify roles on blockchain (primary source of truth)
+        const roleData = await verifyUserRoleOnChain(address, true);
 
-          setUser(userData);
-
-          // IMPORTANT: Also store in localStorage for _app.js compatibility
-          if (typeof window !== "undefined") {
-            localStorage.setItem("walletAddress", address);
-            localStorage.setItem("userRole", data.user.role);
-            localStorage.setItem("userId", data.user.id.toString());
-          }
-        } else {
-          setUser(null);
-          setError(data.error || "Authentication failed");
-          // Clear localStorage on failure
-          if (typeof window !== "undefined") {
-            localStorage.removeItem("walletAddress");
-            localStorage.removeItem("userRole");
-            localStorage.removeItem("userId");
-          }
+        if (!roleData) {
+          throw new Error("Failed to verify blockchain roles");
         }
-      } else {
+
+        // 2. Get or create user profile from database (supplementary data only)
+        let userProfile = null;
+        try {
+          const response = await fetch("/api/auth/get-profile", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ walletAddress: address }),
+            credentials: "include",
+          });
+
+          if (response.ok) {
+            const data = await response.json();
+            if (data.success) {
+              userProfile = data.profile;
+            }
+          }
+        } catch (profileError) {
+          console.warn(
+            "⚠️ Could not load user profile from database:",
+            profileError
+          );
+          // Continue without profile data - blockchain auth is primary
+        }
+
+        // 3. Combine blockchain roles with profile data
+        const userData = {
+          walletAddress: address,
+          role: roleData.primaryRole,
+          roles: roleData.roles,
+          redirectTo: roleData.redirectTo,
+          authenticated: true,
+          // Profile data (optional)
+          id: userProfile?.id || `wallet_${address.slice(2, 8)}`,
+          name:
+            userProfile?.name ||
+            `User ${address.slice(0, 6)}...${address.slice(-4)}`,
+          email: userProfile?.email || null,
+          createdAt: userProfile?.created_at || new Date().toISOString(),
+          lastLogin: new Date().toISOString(),
+        };
+
+        setUser(userData);
+
+        // Store in localStorage for persistence
+        if (typeof window !== "undefined") {
+          localStorage.setItem("walletAddress", address);
+          localStorage.setItem("userRole", roleData.primaryRole);
+          localStorage.setItem("userId", userData.id); // Store user ID
+          localStorage.setItem(
+            "blockchainRoles",
+            JSON.stringify(roleData.roles)
+          );
+        }
+
+        // 4. Update database with latest login (fire and forget)
+        try {
+          fetch("/api/auth/update-last-login", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              walletAddress: address,
+              role: roleData.primaryRole,
+            }),
+            credentials: "include",
+          }).catch(console.warn); // Don't block on database errors
+        } catch {}
+
+        return userData;
+      } catch (err) {
+        console.error("❌ Error loading user data:", err);
+        setError(err.message);
         setUser(null);
-        setError("Login failed");
-        // Clear localStorage on failure
+
+        // Clear localStorage on error
         if (typeof window !== "undefined") {
           localStorage.removeItem("walletAddress");
           localStorage.removeItem("userRole");
           localStorage.removeItem("userId");
+          localStorage.removeItem("blockchainRoles");
         }
+
+        throw err;
+      } finally {
+        setLoading(false);
       }
-    } catch (err) {
-      console.error("Error loading user data:", err);
-      setError(err.message);
-      setUser(null);
-      // Clear localStorage on error
-      if (typeof window !== "undefined") {
-        localStorage.removeItem("walletAddress");
-        localStorage.removeItem("userRole");
-        localStorage.removeItem("userId");
-      }
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+    },
+    [verifyUserRoleOnChain]
+  );
 
   // Check if user can access current route
   const canAccessRoute = useCallback((userRole, pathname) => {
     if (publicRoutes.includes(pathname)) return true;
 
-    const allowedRoutes = roleRoutes[userRole] || [];
+    const allowedRoutes = roleRoutes[userRole] || roleRoutes.holder;
     return allowedRoutes.some((route) => pathname.startsWith(route));
   }, []);
 
@@ -188,195 +269,192 @@ export function AuthProvider({ children }) {
     async function checkAuth() {
       try {
         setLoading(true);
+
+        // Check if wallet is connected
         const address = await getCurrentWalletAddress();
 
         if (address) {
           await loadUserData(address);
         } else {
           setUser(null);
+          // Redirect to login if on protected route
+          if (!publicRoutes.includes(router.pathname)) {
+            router.push("/login");
+          }
         }
       } catch (err) {
         console.error("Authentication error:", err);
         setError(err.message);
         setUser(null);
+
+        if (!publicRoutes.includes(router.pathname)) {
+          router.push("/login");
+        }
       } finally {
         setLoading(false);
       }
     }
 
     checkAuth();
-  }, [loadUserData]);
+  }, [router.pathname]);
 
-  // Disabled periodic role verification to prevent loops
-  // TODO: Re-enable once authentication is stable
-  // useEffect(() => {
-  //   if (user?.walletAddress) {
-  //     roleVerificationIntervalRef.current = setInterval(() => {
-  //       verifyUserRole(false);
-  //     }, 5 * 60 * 1000);
-
-  //     return () => {
-  //       if (roleVerificationIntervalRef.current) {
-  //         clearInterval(roleVerificationIntervalRef.current);
-  //       }
-  //     };
-  //   }
-  // }, [user, verifyUserRole]);
-
-  // Enhanced wallet event listeners
+  // Set up wallet event listeners
   useEffect(() => {
-    if (window.ethereum) {
-      // Remove previous listeners
-      if (accountChangeListenerRef.current) {
+    if (typeof window === "undefined" || !window.ethereum) return;
+
+    // Handle account changes
+    const handleAccountsChanged = async (accounts) => {
+      console.log("🔄 Account changed:", accounts);
+
+      if (accounts.length === 0) {
+        // User disconnected wallet
+        setUser(null);
+        setRoleVerificationCache(null);
+        setLastVerification(null);
+
+        if (typeof window !== "undefined") {
+          localStorage.removeItem("walletAddress");
+          localStorage.removeItem("userRole");
+          localStorage.removeItem("userId");
+          localStorage.removeItem("blockchainRoles");
+        }
+
+        if (!publicRoutes.includes(router.pathname)) {
+          router.push("/login");
+        }
+      } else if (accounts[0] !== user?.walletAddress) {
+        // User switched accounts
+        try {
+          await loadUserData(accounts[0]);
+        } catch (error) {
+          console.error("Error switching accounts:", error);
+          setError("Failed to switch accounts");
+        }
+      }
+    };
+
+    // Handle chain changes
+    const handleChainChanged = (chainId) => {
+      console.log("🔄 Chain changed:", chainId);
+      // Refresh the page to reset the application state
+      window.location.reload();
+    };
+
+    // Add event listeners
+    window.ethereum.on("accountsChanged", handleAccountsChanged);
+    window.ethereum.on("chainChanged", handleChainChanged);
+
+    // Store listener refs for cleanup
+    accountChangeListenerRef.current = handleAccountsChanged;
+    chainChangeListenerRef.current = handleChainChanged;
+
+    // Cleanup function
+    return () => {
+      if (window.ethereum && accountChangeListenerRef.current) {
         window.ethereum.removeListener(
           "accountsChanged",
           accountChangeListenerRef.current
         );
       }
-
-      if (chainChangeListenerRef.current) {
+      if (window.ethereum && chainChangeListenerRef.current) {
         window.ethereum.removeListener(
           "chainChanged",
           chainChangeListenerRef.current
         );
       }
+    };
+  }, [user, router, loadUserData]);
 
-      // Enhanced account change handler
-      const handleAccountsChanged = async (accounts) => {
-        if (accounts.length === 0) {
-          // User disconnected wallet
-          setUser(null);
-          setRoleVerificationCache(null);
-          setLastVerification(null);
+  // Periodic role verification (every 5 minutes)
+  useEffect(() => {
+    if (!user?.walletAddress) return;
 
-          // Clear localStorage
-          if (typeof window !== "undefined") {
-            localStorage.removeItem("walletAddress");
-            localStorage.removeItem("userRole");
-            localStorage.removeItem("userId");
-          }
+    const interval = setInterval(async () => {
+      try {
+        console.log("🔄 Periodic role verification...");
+        const currentRoles = await verifyUserRoleOnChain(
+          user.walletAddress,
+          true
+        );
 
-          if (!publicRoutes.includes(router.pathname)) {
-            router.push("/login");
-          }
-        } else {
-          // User switched accounts - force role verification
-          await loadUserData(accounts[0]);
+        if (currentRoles && currentRoles.primaryRole !== user.role) {
+          console.log("🔄 Role change detected, reloading user data...");
+          await loadUserData(user.walletAddress);
         }
-      };
+      } catch (error) {
+        console.warn("Periodic role verification failed:", error);
+      }
+    }, 5 * 60 * 1000); // 5 minutes
 
-      const handleChainChanged = () => {
-        // Clear cache and reload
-        setRoleVerificationCache(null);
-        setLastVerification(null);
-        window.location.reload();
-      };
-
-      // Save references
-      accountChangeListenerRef.current = handleAccountsChanged;
-      chainChangeListenerRef.current = handleChainChanged;
-
-      // Add listeners
-      window.ethereum.on("accountsChanged", handleAccountsChanged);
-      window.ethereum.on("chainChanged", handleChainChanged);
-    }
+    roleVerificationIntervalRef.current = interval;
 
     return () => {
-      if (window.ethereum) {
-        if (accountChangeListenerRef.current) {
-          window.ethereum.removeListener(
-            "accountsChanged",
-            accountChangeListenerRef.current
-          );
-        }
-
-        if (chainChangeListenerRef.current) {
-          window.ethereum.removeListener(
-            "chainChanged",
-            chainChangeListenerRef.current
-          );
-        }
+      if (roleVerificationIntervalRef.current) {
+        clearInterval(roleVerificationIntervalRef.current);
       }
     };
-  }, [router.pathname, loadUserData]);
+  }, [user?.walletAddress, user?.role, verifyUserRoleOnChain, loadUserData]);
 
-  // Simplified route protection - only redirect to login if not authenticated
-  useEffect(() => {
-    if (loading) return;
-
-    const isPublicRoute = publicRoutes.includes(router.pathname);
-
-    // Only redirect to login if user is not authenticated and trying to access protected route
-    if (!user && !isPublicRoute) {
-      router.push("/login");
-    }
-    // Don't automatically redirect authenticated users - let them navigate manually
-  }, [user, loading, router.pathname]);
-
-  // Enhanced login with better error handling
+  // Login function
   const login = async () => {
     try {
       setLoading(true);
       setError(null);
 
-      const { address } = await connectWallet();
+      const result = await connectWallet();
 
-      // Clear any existing cache
-      setRoleVerificationCache(null);
-      setLastVerification(null);
+      if (!result.success) {
+        setError(result.error);
+        return { success: false, error: result.error };
+      }
 
+      const address = result.address;
       await loadUserData(address);
 
-      return { success: true, address };
+      return { success: true };
     } catch (err) {
-      console.error("Login error:", err);
-      setError(err.message);
-      return { success: false, error: err.message };
+      const errorMessage = err.message || "Failed to connect wallet";
+      setError(errorMessage);
+      return { success: false, error: errorMessage };
     } finally {
       setLoading(false);
     }
   };
 
-  // Enhanced logout with cache clearing
+  // Logout function
   const logout = async () => {
     try {
-      // Call logout API
-      await fetch("/api/auth/logout", {
-        method: "POST",
-        credentials: "include",
-      });
-    } catch (error) {
-      console.error("Logout API error:", error);
+      setUser(null);
+      setRoleVerificationCache(null);
+      setLastVerification(null);
+      setError(null);
+
+      // Clear localStorage
+      if (typeof window !== "undefined") {
+        localStorage.removeItem("walletAddress");
+        localStorage.removeItem("userRole");
+        localStorage.removeItem("userId");
+        localStorage.removeItem("blockchainRoles");
+      }
+
+      // Log logout activity (fire and forget)
+      if (user?.walletAddress) {
+        fetch("/api/activity/log", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            type: "USER_LOGOUT",
+            walletAddress: user.walletAddress,
+            details: "User disconnected wallet",
+          }),
+        }).catch(console.warn);
+      }
+
+      router.push("/login");
+    } catch (err) {
+      console.error("Logout error:", err);
     }
-
-    // Clear all state and cache
-    setUser(null);
-    setRoleVerificationCache(null);
-    setLastVerification(null);
-    setError(null);
-
-    // Clear localStorage for _app.js compatibility
-    if (typeof window !== "undefined") {
-      localStorage.removeItem("walletAddress");
-      localStorage.removeItem("userRole");
-      localStorage.removeItem("userId");
-    }
-
-    // Clear any intervals
-    if (roleVerificationIntervalRef.current) {
-      clearInterval(roleVerificationIntervalRef.current);
-    }
-
-    // Redirect to home page
-    router.push("/");
   };
-
-  // Force role refresh (for after admin changes)
-  const refreshUserRole = useCallback(async () => {
-    if (user?.walletAddress) {
-      await verifyUserRole(true);
-    }
-  }, [user, verifyUserRole]);
 
   const value = {
     user,
@@ -384,9 +462,9 @@ export function AuthProvider({ children }) {
     error,
     login,
     logout,
-    refreshUserRole,
     canAccessRoute,
-    roleVerification: roleVerificationCache,
+    verifyUserRoleOnChain,
+    roleVerificationCache,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
@@ -394,7 +472,7 @@ export function AuthProvider({ children }) {
 
 export function useAuth() {
   const context = useContext(AuthContext);
-  if (context === undefined) {
+  if (!context) {
     throw new Error("useAuth must be used within an AuthProvider");
   }
   return context;
