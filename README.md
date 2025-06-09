@@ -24,7 +24,7 @@ scripts\deploy.bat          # Windows
 🔍 Health Check: http://localhost:3000/api/health
 ```
 
-### **Step 2: Deploy Smart Contract (3 minutes)**
+### **Step 2: Deploy Smart Contract (2 minutes)**
 
 ```bash
 # 1. Install Node.js dependencies
@@ -32,14 +32,28 @@ npm install
 
 # 2. Download and open Ganache GUI from https://trufflesuite.com/ganache/
 # 3. Create new workspace or use quickstart (port 7545, chain ID 1337)
-# 4. Deploy smart contract
-npx hardhat run scripts/deploy.js --network ganache
 
-# 5. Update .env.local with contract address and restart
-docker-compose restart webapp
+# 4. Automated deployment (deploys contract + updates everything)
+node scripts/deploy-contract.js
+
+# Alternative: Use platform-specific scripts
+scripts\deploy-contract.bat     # Windows
+./scripts/deploy-contract.sh    # Linux/Mac
 ```
 
 **That's it!** Your complete blockchain certificate system is now running. 🎉
+
+### **🔄 Contract Address Automation**
+
+One of the challenges with local blockchain development is that contract addresses change with each deployment. CertChain solves this with automated scripts:
+
+- **📦 Full Automation**: `node scripts/deploy-contract.js` handles everything
+- **⚙️ Semi-Automation**: `node scripts/update-contract-address.js` updates configs only
+- **🔄 Auto-Updates**: Both `.env.local` and `docker-compose.yml` get updated
+- **🐳 Auto-Rebuild**: Docker container rebuilds with new address
+- **✅ Auto-Verify**: Health check confirms everything is working
+
+No more manual file editing or forgetting to restart containers!
 
 ---
 
@@ -179,7 +193,7 @@ docker-compose restart webapp
 
 ### **Environment Configuration**
 
-The deployment script automatically creates `.env.local`, but you can create it manually:
+The deployment script automatically creates `.env.local`, and contract deployment scripts update both `.env.local` and `docker-compose.yml`:
 
 ```bash
 # MySQL Configuration (handled by Docker)
@@ -189,11 +203,13 @@ MYSQL_USER=certchain_user
 MYSQL_PASSWORD=certchain_password
 MYSQL_DATABASE=certchain
 
-# Blockchain Configuration (update after contract deployment)
+# Blockchain Configuration (auto-updated by deployment scripts)
 NEXT_PUBLIC_CONTRACT_ADDRESS=0x85C553D13BdD2213910043E387072AC412c33653
 NEXT_PUBLIC_CHAIN_ID=1337
 NEXT_PUBLIC_RPC_URL=http://127.0.0.1:7545
 ```
+
+**Note**: Contract addresses are automatically updated in both configuration files when using the automated deployment scripts.
 
 ### **Complete Deployment Process**
 
@@ -246,22 +262,84 @@ Transaction hash: 0xa1b2c3d4...
 Gas used: 1234567
 ```
 
-#### **Step 3: Update Configuration & Restart**
+#### **Step 3: Smart Contract Deployment & Configuration**
+
+You have two options for deploying contracts and updating your system configuration:
+
+##### **Option A: Fully Automated Deployment (Recommended)**
+
+Deploy contracts and update everything automatically with one command:
 
 ```bash
-# 1. Copy the contract address from the deployment output
-# 2. Update .env.local file
-# Replace this line:
-NEXT_PUBLIC_CONTRACT_ADDRESS=0x85C553D13BdD2213910043E387072AC412c33653
-# With your new contract address:
-NEXT_PUBLIC_CONTRACT_ADDRESS=0x5FbDB2315678afecb367f032d93F642f64180aa3
+# Full automation - deploys contract and updates all configs
+# Windows users
+scripts\deploy-contract.bat
 
-# 3. Restart the web application to load new contract
-docker-compose restart webapp
+# Linux/Mac users
+./scripts/deploy-contract.sh
 
-# 4. Verify everything is working
-scripts\deploy.bat --health    # Windows
-./scripts/deploy.sh --health   # Linux/Mac
+# Or run the Node.js script directly
+node scripts/deploy-contract.js
+```
+
+**What the automated script does:**
+
+1. ✅ **Deploys** the smart contract via Hardhat to Ganache
+2. ✅ **Extracts** the new contract address from deployment output
+3. ✅ **Updates** both `.env.local` and `docker-compose.yml` files
+4. ✅ **Rebuilds** Docker container with new contract address
+5. ✅ **Restarts** the application with updated configuration
+6. ✅ **Verifies** deployment health and connectivity
+
+**Sample output:**
+
+```
+🚀 Deploying smart contract...
+✅ CertificateNFT deployed to: 0x46104c256d9b4e561e5E8cd3B248C0275d1e388F
+🔄 Updating configuration files...
+✅ Updated docker-compose.yml
+✅ Updated .env.local
+🔨 Rebuilding Docker container...
+🔄 Restarting Docker container...
+🎉 Deployment complete!
+📄 Contract Address: 0x46104c256d9b4e561e5E8cd3B248C0275d1e388F
+```
+
+##### **Option B: Manual Deployment with Semi-Automation**
+
+If you prefer more control over the deployment process:
+
+```bash
+# 1. Deploy contract manually
+npx hardhat run scripts/deploy.js --network ganache
+
+# 2. Copy the contract address from output, then auto-update configs
+node scripts/update-contract-address.js 0xYourNewContractAddress
+
+# 3. Rebuild and restart (done automatically by update script)
+# The update script tells you what to run next
+```
+
+##### **Option C: Fully Manual Process**
+
+For complete manual control:
+
+```bash
+# 1. Deploy contract
+npx hardhat run scripts/deploy.js --network ganache
+
+# 2. Manually edit .env.local - update this line:
+NEXT_PUBLIC_CONTRACT_ADDRESS=0xYourNewContractAddress
+
+# 3. Manually edit docker-compose.yml - update this line:
+NEXT_PUBLIC_CONTRACT_ADDRESS: 0xYourNewContractAddress
+
+# 4. Rebuild and restart containers
+docker-compose build webapp
+docker-compose up -d webapp
+
+# 5. Verify everything is working
+curl http://localhost:3000/api/health
 ```
 
 ### **Alternative: Manual Docker Deployment**
@@ -570,11 +648,14 @@ docker-compose logs webapp
 # View database logs
 docker-compose logs mysql
 
-# Test blockchain connection
-node scripts/test-connection.js
+# Automated contract deployment (recommended)
+node scripts/deploy-contract.js
 
-# Deploy contract to Ganache
+# Manual contract deployment
 npx hardhat run scripts/deploy.js --network ganache
+
+# Update contract address only
+node scripts/update-contract-address.js 0xYourContractAddress
 
 # Run smart contract tests
 npx hardhat test
@@ -673,13 +754,13 @@ Access logs via the admin dashboard at `/admin`.
 
 ### **Common Issues & Solutions**
 
-| Issue                            | Symptoms                                | Solution                                    |
-| -------------------------------- | --------------------------------------- | ------------------------------------------- |
-| **Port 3306 in use**             | MySQL container fails to start          | Docker automatically uses port 3307         |
-| **Docker not running**           | Container start failures                | Start Docker Desktop                        |
-| **Blockchain connection failed** | Health check shows blockchain unhealthy | Start Ganache on port 7545                  |
-| **MetaMask not connecting**      | Wallet connection fails                 | Check network settings (Chain ID: 1337)     |
-| **Certificate issuance fails**   | "missing revert data" error             | Import Ganache account or grant ISSUER role |
+| Issue                            | Symptoms                                | Solution                                                                    |
+| -------------------------------- | --------------------------------------- | --------------------------------------------------------------------------- |
+| **Port 3306 in use**             | MySQL container fails to start          | Docker automatically uses port 3307                                         |
+| **Docker not running**           | Container start failures                | Start Docker Desktop                                                        |
+| **Blockchain connection failed** | Health check shows blockchain unhealthy | Start Ganache on port 7545, uses host.docker.internal for Docker networking |
+| **MetaMask not connecting**      | Wallet connection fails                 | Check network settings (Chain ID: 1337)                                     |
+| **Certificate issuance fails**   | "missing revert data" error             | Import Ganache account or grant ISSUER role                                 |
 
 ### **Diagnostic Commands**
 
@@ -746,9 +827,13 @@ CertChain/
 │   ├── login.js              # Authentication page
 │   └── verify.js             # Public verification page
 ├── 📁 scripts/                # Deployment & utility scripts
-│   ├── deploy.bat            # Windows deployment script
-│   ├── deploy.sh             # Linux/Mac deployment script
+│   ├── deploy.bat            # Windows web app deployment
+│   ├── deploy.sh             # Linux/Mac web app deployment
 │   ├── deploy.js             # Smart contract deployment
+│   ├── deploy-contract.js    # Automated contract deployment
+│   ├── deploy-contract.bat   # Windows contract deployment wrapper
+│   ├── deploy-contract.sh    # Linux/Mac contract deployment wrapper
+│   ├── update-contract-address.js # Contract address updater
 │   ├── certchain.session.sql # Database schema
 │   └── create-activity-table.sql # Activity logging schema
 ├── 📁 styles/                 # CSS and styling

@@ -25,12 +25,14 @@ services:
     build: 
       context: .
       dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_RPC_URL: http://host.docker.internal:7545
+        NEXT_PUBLIC_CHAIN_ID: 1337
+        NEXT_PUBLIC_CONTRACT_ADDRESS: 0x46104c256d9b4e561e5E8cd3B248C0275d1e388F
     container_name: certchain-app
     restart: unless-stopped
     ports:
       - "3000:3000"
-    env_file:
-      - .env.local
     environment:
       - NODE_ENV=production
       - MYSQL_HOST=mysql
@@ -38,12 +40,17 @@ services:
       - MYSQL_USER=certchain_user
       - MYSQL_PASSWORD=certchain_password
       - MYSQL_DATABASE=certchain
+      # Override RPC URL to use host.docker.internal for Ganache on host
+      - NEXT_PUBLIC_RPC_URL=http://host.docker.internal:7545
+      # Copy other blockchain settings from .env.local
+      - NEXT_PUBLIC_CHAIN_ID=1337
+      - NEXT_PUBLIC_CONTRACT_ADDRESS=0x46104c256d9b4e561e5E8cd3B248C0275d1e388F
     depends_on:
       - mysql
     networks:
       - certchain-network
-    volumes:
-      - ./.env.local:/app/.env.local
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
 
   # Optional: phpMyAdmin for database management
   phpmyadmin:

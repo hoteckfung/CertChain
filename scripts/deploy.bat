@@ -27,7 +27,7 @@ echo   --logs         Show application logs
 echo   --health       Check application health
 echo   --stop         Stop all Docker services
 echo.
-echo Note: Smart contracts must be deployed manually
+echo Note: Smart contracts must be deployed manually using Ganache GUI
 echo See README.md for complete deployment instructions
 pause
 exit /b 0
@@ -47,7 +47,7 @@ exit /b 0
 echo [INFO] Stopping all Docker services...
 docker-compose down
 echo [SUCCESS] All Docker services stopped
-echo [INFO] Note: This does not stop Ganache if running separately
+echo [INFO] Note: This does not stop Ganache GUI if running separately
 pause
 exit /b 0
 
@@ -191,11 +191,12 @@ echo.
 echo    Manual Smart Contract Deployment Steps:
 echo    1. Install Node.js and npm (if not already installed)
 echo    2. Install dependencies: npm install
-echo    3. Install Ganache globally: npm install -g ganache
-echo    4. Start Ganache: ganache --host 0.0.0.0 --port 7545 --chainId 1337
-echo    5. Deploy contract: npx hardhat run scripts/deploy.js --network ganache
-echo    6. Update .env.local with the new contract address
-echo    7. Restart containers: docker-compose restart webapp
+echo    3. Start Ganache GUI app with these settings:
+echo       - RPC Server: HTTP://127.0.0.1:7545
+echo       - Chain ID: 1337
+echo    4. Deploy contract: npx hardhat run scripts/deploy.js --network ganache
+echo    5. Update .env.local with the new contract address
+echo    6. Restart containers: docker-compose restart webapp
 echo.
 echo    For detailed instructions, see README.md - 'Manual Smart Contract Deployment' section
 echo.
