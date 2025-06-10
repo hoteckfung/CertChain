@@ -2,7 +2,7 @@
 
 // IPFS Desktop default endpoints
 const IPFS_API_URL = "http://localhost:5001";
-const IPFS_GATEWAY_URL = "http://localhost:8080";
+const IPFS_GATEWAY_URL = "http://localhost:8081"; // Changed from 8080 to 8081
 
 /**
  * Upload a file to local IPFS node
@@ -10,7 +10,7 @@ const IPFS_GATEWAY_URL = "http://localhost:8080";
  * @param {string} name - Name for the file
  * @returns {Promise<{hash: string, timestamp: string, name: string, size: number}>}
  */
-export async function uploadToPinata(file, name) {
+export async function uploadToIPFS(file, name) {
   try {
     console.log("Uploading to local IPFS node:", name);
 
@@ -149,7 +149,7 @@ export async function getIPFSInfo() {
 }
 
 export default {
-  uploadToPinata,
+  uploadToIPFS,
   getIPFSUrl,
   testAuthentication,
   isValidIPFSHash,
