@@ -1,4 +1,4 @@
-import { connectToDatabase } from "../../../lib/db";
+import mysql from "../../../utils/mysql";
 
 export default async function handler(req, res) {
   if (req.method !== "GET") {
@@ -21,9 +21,18 @@ export default async function handler(req, res) {
 
   // Test Database Connection
   try {
-    const connection = await connectToDatabase();
-    await connection.execute("SELECT 1");
-    await connection.end();
+    const { connected, error } = await mysql.checkConnection();
+
+    if (!connected) {
+      throw new Error(error?.message || "Database connection failed");
+    }
+
+    // Test a basic query
+    const { data, error: queryError } = await mysql.query("SELECT 1 as test");
+
+    if (queryError) {
+      throw new Error(`Database query failed: ${queryError.message}`);
+    }
 
     health.services.database = {
       status: "healthy",

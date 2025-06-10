@@ -22,7 +22,7 @@ services:
 
   # Next.js Application
   webapp:
-    build: 
+    build:
       context: .
       dockerfile: Dockerfile
       args:
@@ -44,7 +44,7 @@ services:
       - NEXT_PUBLIC_RPC_URL=http://host.docker.internal:7545
       # Copy other blockchain settings from .env.local
       - NEXT_PUBLIC_CHAIN_ID=1337
-      - NEXT_PUBLIC_CONTRACT_ADDRESS=0x46104c256d9b4e561e5E8cd3B248C0275d1e388F
+      - NEXT_PUBLIC_CONTRACT_ADDRESS=0xD47B5dF53A2069E14aBa0Da4635fB005144732cC 
     depends_on:
       - mysql
     networks:
@@ -74,4 +74,4 @@ volumes:
 
 networks:
   certchain-network:
-    driver: bridge 
+    driver: bridge

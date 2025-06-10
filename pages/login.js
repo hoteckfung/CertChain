@@ -15,31 +15,28 @@ import {
 } from "../components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "../components/ui/alert";
 import { isMetaMaskInstalled } from "../lib/auth-client";
-import MetaMaskIcon from "../components/MetaMaskIcon";
-import { AlertTriangle, Loader2, Info } from "lucide-react";
+import { Loader2, AlertTriangle, Info } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
+import MetaMaskIcon from "../components/MetaMaskIcon";
 
 export default function Login() {
-  const { login, user, loading, error } = useAuth();
-  const [connectionError, setConnectionError] = useState("");
+  const { user, login, loading, error } = useAuth();
   const [isConnecting, setIsConnecting] = useState(false);
+  const [connectionError, setConnectionError] = useState("");
   const router = useRouter();
-  const [dbStatus, setDbStatus] = useState(null);
   const [hasMetaMask, setHasMetaMask] = useState(true);
 
   // Redirect if already logged in (but only if user object is complete)
   useEffect(() => {
     if (user && !loading && user.walletAddress && user.role) {
-      // Only redirect if we have a complete user object
-      switch (user.role) {
+      const role = user.role;
+      switch (role) {
         case "admin":
           router.push("/admin");
           break;
         case "issuer":
-          router.push("/issuer");
-          break;
         case "holder":
-          router.push("/holder");
+          router.push("/dashboard");
           break;
         default:
           router.push("/");
@@ -50,43 +47,6 @@ export default function Login() {
   // Check if MetaMask is installed
   useEffect(() => {
     setHasMetaMask(isMetaMaskInstalled());
-  }, []);
-
-  // Check connection to MySQL on page load
-  useEffect(() => {
-    const checkConnection = async () => {
-      try {
-        const response = await fetch("/api/db-test");
-
-        // Check if response is ok and is JSON
-        if (!response.ok) {
-          setDbStatus("error");
-          console.error("Database test API returned error:", response.status);
-          return;
-        }
-
-        const contentType = response.headers.get("content-type");
-        if (!contentType || !contentType.includes("application/json")) {
-          setDbStatus("error");
-          console.error("Database test API returned non-JSON response");
-          return;
-        }
-
-        const data = await response.json();
-
-        if (data.status === "success") {
-          setDbStatus("connected");
-        } else {
-          setDbStatus("error");
-          console.error("Database connection error:", data.error);
-        }
-      } catch (error) {
-        setDbStatus("error");
-        console.error("Connection check error:", error);
-      }
-    };
-
-      checkConnection();
   }, []);
 
   const handleConnectWallet = async () => {
@@ -134,29 +94,6 @@ export default function Login() {
             </CardHeader>
 
             <CardContent>
-              {/* Database Status Indicator */}
-              {dbStatus === "error" && (
-                <Alert className="mb-4 border-amber-500 bg-amber-50">
-                  <AlertTriangle className="h-4 w-4 text-amber-500" />
-                  <AlertTitle>Database Connection Issue</AlertTitle>
-                  <AlertDescription>
-                    Cannot connect to the database. Some features may not work
-                    properly.
-                  </AlertDescription>
-                </Alert>
-              )}
-
-              {dbStatus === "missing" && (
-                <Alert className="mb-4 border-amber-500 bg-amber-50">
-                  <Info className="h-4 w-4 text-amber-500" />
-                  <AlertTitle>Database Configuration Missing</AlertTitle>
-                  <AlertDescription>
-                    MySQL credentials are not set. Please configure your .env
-                    file.
-                  </AlertDescription>
-                </Alert>
-              )}
-
               {/* MetaMask Status */}
               {!hasMetaMask && (
                 <Alert className="mb-4 border-amber-500 bg-amber-50">

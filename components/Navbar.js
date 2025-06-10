@@ -2,29 +2,14 @@ import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/router";
 import ConnectButton from "./ConnectButton";
-import { getWalletAddress, getUserRole, logout } from "../lib/auth-client";
+import { useAuth } from "../contexts/AuthContext";
 
 const Navbar = () => {
-  const [wallet, setWallet] = useState(null);
-  const [userRole, setUserRole] = useState(null);
+  const { user, logout } = useAuth();
   const router = useRouter();
 
-  useEffect(() => {
-    // Check if wallet is connected on client-side
-    if (typeof window !== "undefined") {
-      const storedWallet = getWalletAddress();
-      const storedRole = getUserRole();
-
-      setWallet(storedWallet);
-      setUserRole(storedRole);
-    }
-  }, []);
-
-  const handleLogout = () => {
-    logout();
-    setWallet(null);
-    setUserRole(null);
-    router.push("/");
+  const handleLogout = async () => {
+    await logout();
   };
 
   return (
@@ -42,19 +27,19 @@ const Navbar = () => {
         </Link>
 
         <div className="flex items-center space-x-4">
-          {wallet ? (
+          {user ? (
             <>
               <div className="text-sm text-gray-600 mr-2">
-                <span className="font-medium">{userRole}</span>
+                <span className="font-medium">{user.role}</span>
                 {" • "}
                 <span className="font-mono">
-                  {wallet.substring(0, 6)}...
-                  {wallet.substring(wallet.length - 4)}
+                  {user.walletAddress.substring(0, 6)}...
+                  {user.walletAddress.substring(user.walletAddress.length - 4)}
                 </span>
               </div>
-              {userRole && (
+              {user.role && (
                 <Link
-                  href={`/${userRole.toLowerCase()}`}
+                  href={user.role === "admin" ? "/admin" : "/dashboard"}
                   className="text-primary-blue hover:text-blue-700 mr-4">
                   Dashboard
                 </Link>

@@ -5,7 +5,7 @@ const MetaMaskIcon = ({ className = "h-5 w-5" }) => {
     <svg
       xmlns="http://www.w3.org/2000/svg"
       className={className}
-      viewBox="0 0 507.83 470.86"
+      viewBox="0 0 527.83 470.86"
       fill="none">
       <g strokeLinecap="round" strokeLinejoin="round">
         <polygon

@@ -62,9 +62,9 @@ const Roles = () => {
             }
             title="For Issuers"
             features={[
-              "Certificate creation interface",
-              "Bulk upload via Excel",
               "Individual certificate generation",
+              "Bulk upload via Excel",
+              "Certificate issuance interface",
             ]}
           />
 

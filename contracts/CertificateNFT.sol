@@ -14,7 +14,6 @@ contract CertificateNFT is ERC721, ERC721URIStorage, AccessControl, Pausable {
     // Role definitions
     bytes32 public constant ADMIN_ROLE = keccak256("ADMIN_ROLE");
     bytes32 public constant ISSUER_ROLE = keccak256("ISSUER_ROLE");
-    bytes32 public constant VERIFIER_ROLE = keccak256("VERIFIER_ROLE");
 
     // Token counter for unique certificate IDs
     uint256 private _tokenIdCounter;
@@ -48,17 +47,12 @@ contract CertificateNFT is ERC721, ERC721URIStorage, AccessControl, Pausable {
     );
 
     event CertificateRevoked(uint256 indexed tokenId, address indexed revoker);
-    event CertificateVerified(
-        uint256 indexed tokenId,
-        address indexed verifier
-    );
 
     constructor() ERC721("CertChain Certificate", "CERT") {
-        // Grant admin role to contract deployer
+        // The account that deploys the contract is the first administrator.
+        // This admin can grant and revoke all other roles.
         _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
         _grantRole(ADMIN_ROLE, msg.sender);
-        _grantRole(ISSUER_ROLE, msg.sender);
-        _grantRole(VERIFIER_ROLE, msg.sender);
     }
 
     /**
@@ -231,6 +225,26 @@ contract CertificateNFT is ERC721, ERC721URIStorage, AccessControl, Pausable {
     }
 
     /**
+     * @dev Grant admin role to an address (super admin only)
+     * @param account Address to grant admin role
+     */
+    function grantAdminRole(
+        address account
+    ) public onlyRole(DEFAULT_ADMIN_ROLE) {
+        _grantRole(ADMIN_ROLE, account);
+    }
+
+    /**
+     * @dev Revoke admin role from an address (super admin only)
+     * @param account Address to revoke admin role
+     */
+    function revokeAdminRole(
+        address account
+    ) public onlyRole(DEFAULT_ADMIN_ROLE) {
+        _revokeRole(ADMIN_ROLE, account);
+    }
+
+    /**
      * @dev Grant issuer role to an address (admin only)
      * @param account Address to grant issuer role
      */
@@ -244,22 +258,6 @@ contract CertificateNFT is ERC721, ERC721URIStorage, AccessControl, Pausable {
      */
     function revokeIssuerRole(address account) public onlyRole(ADMIN_ROLE) {
         _revokeRole(ISSUER_ROLE, account);
-    }
-
-    /**
-     * @dev Grant verifier role to an address (admin only)
-     * @param account Address to grant verifier role
-     */
-    function grantVerifierRole(address account) public onlyRole(ADMIN_ROLE) {
-        _grantRole(VERIFIER_ROLE, account);
-    }
-
-    /**
-     * @dev Revoke verifier role from an address (admin only)
-     * @param account Address to revoke verifier role
-     */
-    function revokeVerifierRole(address account) public onlyRole(ADMIN_ROLE) {
-        _revokeRole(VERIFIER_ROLE, account);
     }
 
     /**
@@ -277,15 +275,6 @@ contract CertificateNFT is ERC721, ERC721URIStorage, AccessControl, Pausable {
     }
 
     /**
-     * @dev Check if an address has issuer role
-     * @param account Address to check
-     * @return Whether the address has issuer role
-     */
-    function isIssuer(address account) public view returns (bool) {
-        return hasRole(ISSUER_ROLE, account);
-    }
-
-    /**
      * @dev Check if an address has admin role
      * @param account Address to check
      * @return Whether the address has admin role
@@ -295,12 +284,12 @@ contract CertificateNFT is ERC721, ERC721URIStorage, AccessControl, Pausable {
     }
 
     /**
-     * @dev Check if an address has verifier role
+     * @dev Check if an address has issuer role
      * @param account Address to check
-     * @return Whether the address has verifier role
+     * @return Whether the address has issuer role
      */
-    function isVerifier(address account) public view returns (bool) {
-        return hasRole(VERIFIER_ROLE, account);
+    function isIssuer(address account) public view returns (bool) {
+        return hasRole(ISSUER_ROLE, account);
     }
 
     // Override required functions

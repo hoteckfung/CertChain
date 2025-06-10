@@ -2,11 +2,11 @@ import mysql from "mysql2/promise";
 
 // Create a connection pool
 const pool = mysql.createPool({
-  host: process.env.MYSQL_HOST || "localhost",
-  port: process.env.MYSQL_PORT || 3306,
-  user: process.env.MYSQL_USER || "root",
-  password: process.env.MYSQL_PASSWORD || "mysql",
-  database: process.env.MYSQL_DATABASE || "certchain",
+  host: process.env.MYSQL_HOST,
+  port: process.env.MYSQL_PORT,
+  user: process.env.MYSQL_USER,
+  password: process.env.MYSQL_PASSWORD,
+  database: process.env.MYSQL_DATABASE,
   waitForConnections: true,
   connectionLimit: 10,
   queueLimit: 0,
@@ -35,19 +35,13 @@ export async function getUserByWalletAddress(walletAddress) {
 }
 
 export async function createUser(userData) {
-  const {
-    wallet_address,
-    role,
-    username,
-    email = null,
-    permissions = null,
-  } = userData;
+  const { wallet_address, role, permissions = null } = userData;
 
   const permissionsJson = permissions ? JSON.stringify(permissions) : null;
 
   const { data, error } = await query(
-    "INSERT INTO users (wallet_address, role, username, email, permissions, created_at, last_active) VALUES (?, ?, ?, ?, ?, NOW(), NOW())",
-    [wallet_address.toLowerCase(), role, username, email, permissionsJson]
+    "INSERT INTO users (wallet_address, role, permissions, created_at, last_active) VALUES (?, ?, ?, NOW(), NOW())",
+    [wallet_address.toLowerCase(), role, permissionsJson]
   );
 
   if (error) return { data: null, error };
@@ -96,6 +90,22 @@ export async function getAllUsers(roleFilter = null) {
   return { data, error };
 }
 
+// NEW: Get admin user overview (uses the view we created)
+export async function getAdminUserOverview(roleFilter = null) {
+  let sql = "SELECT * FROM admin_user_overview";
+  let params = [];
+
+  if (roleFilter) {
+    sql += " WHERE role = ?";
+    params.push(roleFilter);
+  }
+
+  sql += " ORDER BY created_at DESC";
+
+  const { data, error } = await query(sql, params);
+  return { data, error };
+}
+
 export async function updateUserRole(userId, newRole) {
   const { data, error } = await query(
     "UPDATE users SET role = ? WHERE id = ?",
@@ -113,29 +123,48 @@ export async function deleteUser(userId) {
   return { data, error };
 }
 
-// Enhanced activity logging with severity and metadata
+// Enhanced activity logging
 export async function logActivity(activity) {
   const {
-    user_id,
+    user_id = null,
     action,
-    details,
-    wallet_address,
-    severity = "info",
-    ip_address = null,
-    user_agent = null,
+    entity_type = "system",
+    entity_id = null,
+    details = null,
+    wallet_address = null,
+    target_wallet_address = null,
+    certificate_id = null,
+    token_id = null,
+    ipfs_hash = null,
+    transaction_hash = null,
+    block_number = null,
+    category = "system_event",
   } = activity;
 
+  // Convert undefined values to null for MySQL compatibility
+  const params = [
+    user_id ?? null,
+    action ?? null,
+    entity_type ?? "system",
+    entity_id ?? null,
+    details ?? null,
+    wallet_address ? wallet_address.toLowerCase() : null,
+    target_wallet_address ? target_wallet_address.toLowerCase() : null,
+    certificate_id ?? null,
+    token_id ?? null,
+    ipfs_hash ?? null,
+    transaction_hash ?? null,
+    block_number ?? null,
+    category ?? "system_event",
+  ];
+
   const { data, error } = await query(
-    "INSERT INTO activity_logs (user_id, action, details, wallet_address, severity, ip_address, user_agent, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, NOW())",
-    [
-      user_id,
-      action,
-      details,
-      wallet_address?.toLowerCase(),
-      severity,
-      ip_address,
-      user_agent,
-    ]
+    `INSERT INTO activity_logs (
+      user_id, action, entity_type, entity_id, details,
+      wallet_address, target_wallet_address, certificate_id, token_id, ipfs_hash,
+      transaction_hash, block_number, category, created_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())`,
+    params
   );
 
   return { data, error };
@@ -144,24 +173,149 @@ export async function logActivity(activity) {
 export async function getActivityLogs(
   limit = 100,
   offset = 0,
-  userIdFilter = null
+  userIdFilter = null,
+  categoryFilter = null,
+  actionFilter = null
 ) {
   let sql = `
-    SELECT al.*, u.username, u.role 
+    SELECT al.*, u.role 
     FROM activity_logs al
     LEFT JOIN users u ON al.user_id = u.id
+    WHERE 1=1
   `;
   let params = [];
 
   if (userIdFilter) {
-    sql += " WHERE al.user_id = ?";
+    sql += " AND al.user_id = ?";
     params.push(userIdFilter);
+  }
+
+  if (categoryFilter) {
+    sql += " AND al.category = ?";
+    params.push(categoryFilter);
+  }
+
+  if (actionFilter) {
+    sql += " AND al.action = ?";
+    params.push(actionFilter);
   }
 
   sql += " ORDER BY al.created_at DESC LIMIT ? OFFSET ?";
   params.push(limit, offset);
 
   const { data, error } = await query(sql, params);
+  return { data, error };
+}
+
+// NEW: Get certificate activity overview (uses the view we created)
+export async function getCertificateActivity(limit = 50, offset = 0) {
+  const { data, error } = await query(
+    "SELECT * FROM admin_certificate_activity LIMIT ? OFFSET ?",
+    [limit, offset]
+  );
+  return { data, error };
+}
+
+// USER SESSION MANAGEMENT
+export async function createUserSession(sessionData) {
+  const { user_id, session_token, wallet_address } = sessionData;
+
+  const { data, error } = await query(
+    `INSERT INTO user_sessions (
+      user_id, session_token, wallet_address,
+      login_time, last_activity, is_active
+    ) VALUES (?, ?, ?, NOW(), NOW(), TRUE)`,
+    [user_id, session_token, wallet_address.toLowerCase()]
+  );
+
+  return { data, error };
+}
+
+export async function updateSessionActivity(sessionToken) {
+  const { error } = await query(
+    "UPDATE user_sessions SET last_activity = NOW() WHERE session_token = ? AND is_active = TRUE",
+    [sessionToken]
+  );
+
+  return { error };
+}
+
+export async function endUserSession(sessionToken) {
+  const { error } = await query(
+    "UPDATE user_sessions SET logout_time = NOW(), is_active = FALSE WHERE session_token = ?",
+    [sessionToken]
+  );
+
+  return { error };
+}
+
+export async function getUserSessions(userId, activeOnly = false) {
+  let sql = "SELECT * FROM user_sessions WHERE user_id = ?";
+  let params = [userId];
+
+  if (activeOnly) {
+    sql += " AND is_active = TRUE";
+  }
+
+  sql += " ORDER BY login_time DESC";
+
+  const { data, error } = await query(sql, params);
+  return { data, error };
+}
+
+// CERTIFICATE MANAGEMENT
+export async function createCertificate(certificateData) {
+  const {
+    token_id,
+    ipfs_hash,
+    issuer_id,
+    holder_id,
+    issuer_wallet,
+    holder_wallet,
+    title,
+    description,
+    transaction_hash = null,
+    block_number = null,
+  } = certificateData;
+
+  const { data, error } = await query(
+    `INSERT INTO certificates (
+      token_id, ipfs_hash, issuer_id, holder_id, issuer_wallet, holder_wallet,
+      title, description, transaction_hash, block_number,
+      issue_date, status, created_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), 'issued', NOW())`,
+    [
+      token_id,
+      ipfs_hash,
+      issuer_id,
+      holder_id,
+      issuer_wallet.toLowerCase(),
+      holder_wallet.toLowerCase(),
+      title,
+      description,
+      transaction_hash,
+      block_number,
+    ]
+  );
+
+  return { data, error };
+}
+
+export async function getCertificatesByHolder(holderWallet) {
+  const { data, error } = await query(
+    "SELECT * FROM certificates WHERE holder_wallet = ? ORDER BY issue_date DESC",
+    [holderWallet.toLowerCase()]
+  );
+
+  return { data, error };
+}
+
+export async function getCertificatesByIssuer(issuerWallet) {
+  const { data, error } = await query(
+    "SELECT * FROM certificates WHERE issuer_wallet = ? ORDER BY issue_date DESC",
+    [issuerWallet.toLowerCase()]
+  );
+
   return { data, error };
 }
 
@@ -202,16 +356,22 @@ export async function createProfile(profileData) {
   const {
     wallet_address,
     full_name,
-    email,
     phone_number,
+    organization = null,
     privacy_settings = {},
   } = profileData;
 
   const privacyJson = JSON.stringify(privacy_settings);
 
   const { data, error } = await query(
-    "INSERT INTO holder_profiles (wallet_address, full_name, email, phone_number, privacy_settings, created_at, updated_at) VALUES (?, ?, ?, ?, ?, NOW(), NOW())",
-    [wallet_address.toLowerCase(), full_name, email, phone_number, privacyJson]
+    "INSERT INTO holder_profiles (wallet_address, full_name, phone_number, organization, privacy_settings, created_at) VALUES (?, ?, ?, ?, ?, NOW())",
+    [
+      wallet_address.toLowerCase(),
+      full_name,
+      phone_number,
+      organization,
+      privacyJson,
+    ]
   );
 
   if (error) return { data: null, error };
@@ -221,7 +381,8 @@ export async function createProfile(profileData) {
 }
 
 export async function updateProfile(walletAddress, profileData) {
-  const { full_name, email, phone_number, privacy_settings } = profileData;
+  const { full_name, phone_number, organization, privacy_settings } =
+    profileData;
 
   const privacyJson = privacy_settings
     ? JSON.stringify(privacy_settings)
@@ -235,13 +396,13 @@ export async function updateProfile(walletAddress, profileData) {
     updates.push("full_name = ?");
     values.push(full_name);
   }
-  if (email !== undefined) {
-    updates.push("email = ?");
-    values.push(email);
-  }
   if (phone_number !== undefined) {
     updates.push("phone_number = ?");
     values.push(phone_number);
+  }
+  if (organization !== undefined) {
+    updates.push("organization = ?");
+    values.push(organization);
   }
   if (privacy_settings !== undefined) {
     updates.push("privacy_settings = ?");
@@ -288,10 +449,19 @@ export default {
   updateUser,
   updateUserLastActive,
   getAllUsers,
+  getAdminUserOverview,
   updateUserRole,
   deleteUser,
   logActivity,
   getActivityLogs,
+  getCertificateActivity,
+  createUserSession,
+  updateSessionActivity,
+  endUserSession,
+  getUserSessions,
+  createCertificate,
+  getCertificatesByHolder,
+  getCertificatesByIssuer,
   getProfileByWalletAddress,
   createProfile,
   updateProfile,

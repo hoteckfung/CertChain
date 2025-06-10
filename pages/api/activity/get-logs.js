@@ -1,4 +1,4 @@
-import { connectToDatabase } from "../../../lib/db";
+import mysql from "../../../utils/mysql";
 
 export default async function handler(req, res) {
   if (req.method !== "GET") {
@@ -16,100 +16,63 @@ export default async function handler(req, res) {
       searchTerm,
     } = req.query;
 
-    const connection = await connectToDatabase();
+    // Build filters for the getActivityLogs function
+    const offset = (parseInt(page) - 1) * parseInt(limit);
 
-    // Build dynamic WHERE clause
-    let whereConditions = [];
-    let queryParams = [];
+    // Use the existing getActivityLogs function from mysql utils
+    const { data: logs, error } = await mysql.getActivityLogs(
+      parseInt(limit),
+      offset,
+      null, // userIdFilter - not used in this context
+      type && type !== "all" ? type : null, // categoryFilter
+      null // actionFilter
+    );
 
-    if (type && type !== "all") {
-      whereConditions.push("type = ?");
-      queryParams.push(type);
+    if (error) {
+      throw new Error(`Failed to fetch logs: ${error.message}`);
     }
 
+    // Apply additional filtering that isn't supported by the base function
+    let filteredLogs = logs || [];
+
     if (walletAddress) {
-      whereConditions.push("(wallet_address = ? OR target_address = ?)");
-      queryParams.push(walletAddress, walletAddress);
+      filteredLogs = filteredLogs.filter(
+        (log) =>
+          log.wallet_address === walletAddress ||
+          log.target_wallet_address === walletAddress
+      );
     }
 
     if (startDate) {
-      whereConditions.push("created_at >= ?");
-      queryParams.push(startDate);
+      filteredLogs = filteredLogs.filter(
+        (log) => new Date(log.created_at) >= new Date(startDate)
+      );
     }
 
     if (endDate) {
-      whereConditions.push("created_at <= ?");
-      queryParams.push(endDate);
+      filteredLogs = filteredLogs.filter(
+        (log) => new Date(log.created_at) <= new Date(endDate)
+      );
     }
 
     if (searchTerm) {
-      whereConditions.push(
-        "(details LIKE ? OR wallet_address LIKE ? OR target_address LIKE ?)"
+      const searchLower = searchTerm.toLowerCase();
+      filteredLogs = filteredLogs.filter(
+        (log) =>
+          (log.details && log.details.toLowerCase().includes(searchLower)) ||
+          (log.wallet_address &&
+            log.wallet_address.toLowerCase().includes(searchLower)) ||
+          (log.target_wallet_address &&
+            log.target_wallet_address.toLowerCase().includes(searchLower))
       );
-      const searchPattern = `%${searchTerm}%`;
-      queryParams.push(searchPattern, searchPattern, searchPattern);
     }
 
-    const whereClause =
-      whereConditions.length > 0
-        ? "WHERE " + whereConditions.join(" AND ")
-        : "";
-
-    // Get total count for pagination
-    const [countResult] = await connection.execute(
-      `SELECT COUNT(*) as total FROM activity_logs ${whereClause}`,
-      queryParams
-    );
-    const totalCount = countResult[0].total;
-
-    // Calculate pagination
-    const offset = (parseInt(page) - 1) * parseInt(limit);
+    // Get total count (approximation since we're filtering after query)
+    const totalCount = filteredLogs.length;
     const totalPages = Math.ceil(totalCount / parseInt(limit));
 
-    // Get paginated results
-    const [logs] = await connection.execute(
-      `SELECT 
-        id,
-        type,
-        wallet_address,
-        target_address,
-        details,
-        transaction_hash,
-        block_number,
-        token_id,
-        ipfs_hash,
-        metadata,
-        created_at
-      FROM activity_logs 
-      ${whereClause}
-      ORDER BY created_at DESC 
-      LIMIT ? OFFSET ?`,
-      [...queryParams, parseInt(limit), offset]
-    );
-
-    // Parse metadata JSON with error handling
-    const processedLogs = logs.map((log) => {
-      let metadata = {};
-
-      // Handle metadata parsing safely
-      if (log.metadata) {
-        if (typeof log.metadata === "string") {
-          try {
-            metadata = JSON.parse(log.metadata);
-          } catch (error) {
-            console.warn(
-              `Failed to parse metadata for log ${log.id}:`,
-              error.message
-            );
-            metadata = {};
-          }
-        } else if (typeof log.metadata === "object") {
-          // Already parsed by MySQL driver
-          metadata = log.metadata;
-        }
-      }
-
-      // Handle date conversion safely
+    // Handle date conversion safely
+    const processedLogs = filteredLogs.map((log) => {
       let created_at;
       if (log.created_at instanceof Date) {
         created_at = log.created_at.toISOString();
@@ -132,12 +95,9 @@ export default async function handler(req, res) {
 
       return {
         ...log,
-        metadata,
         created_at,
       };
     });
-
-    await connection.end();
 
     res.status(200).json({
       success: true,

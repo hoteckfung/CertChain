@@ -7,7 +7,6 @@ describe("CertificateNFT", function () {
   let owner;
   let issuer;
   let recipient;
-  let verifier;
   let unauthorized;
   let addrs;
 
@@ -21,7 +20,7 @@ describe("CertificateNFT", function () {
 
   beforeEach(async function () {
     // Get signers
-    [owner, issuer, recipient, verifier, unauthorized, ...addrs] =
+    [owner, issuer, recipient, unauthorized, ...addrs] =
       await ethers.getSigners();
 
     // Deploy contract
@@ -31,7 +30,6 @@ describe("CertificateNFT", function () {
 
     // Set up roles
     await certificateNFT.grantIssuerRole(issuer.address);
-    await certificateNFT.grantVerifierRole(verifier.address);
   });
 
   describe("Deployment", function () {
@@ -40,10 +38,8 @@ describe("CertificateNFT", function () {
       expect(await certificateNFT.symbol()).to.equal("CERT");
     });
 
-    it("Should grant all roles to deployer", async function () {
+    it("Should grant admin role to deployer", async function () {
       expect(await certificateNFT.isAdmin(owner.address)).to.be.true;
-      expect(await certificateNFT.isIssuer(owner.address)).to.be.true;
-      expect(await certificateNFT.isVerifier(owner.address)).to.be.true;
     });
 
     it("Should start with zero certificates", async function () {
@@ -63,17 +59,6 @@ describe("CertificateNFT", function () {
       expect(await certificateNFT.isIssuer(recipient.address)).to.be.false;
     });
 
-    it("Should allow admin to grant verifier role", async function () {
-      await certificateNFT.grantVerifierRole(recipient.address);
-      expect(await certificateNFT.isVerifier(recipient.address)).to.be.true;
-    });
-
-    it("Should allow admin to revoke verifier role", async function () {
-      await certificateNFT.grantVerifierRole(recipient.address);
-      await certificateNFT.revokeVerifierRole(recipient.address);
-      expect(await certificateNFT.isVerifier(recipient.address)).to.be.false;
-    });
-
     it("Should not allow non-admin to grant roles", async function () {
       await expect(
         certificateNFT.connect(unauthorized).grantIssuerRole(recipient.address)
@@ -83,6 +68,19 @@ describe("CertificateNFT", function () {
     it("Should not allow non-admin to revoke roles", async function () {
       await expect(
         certificateNFT.connect(unauthorized).revokeIssuerRole(issuer.address)
+      ).to.be.reverted;
+    });
+
+    it("Should only allow admin to manage roles", async function () {
+      await expect(
+        certificateNFT.connect(unauthorized).grantIssuerRole(recipient.address)
+      ).to.be.reverted;
+    });
+
+    it("Should only allow admin to revoke issuer role", async function () {
+      await certificateNFT.grantIssuerRole(recipient.address);
+      await expect(
+        certificateNFT.connect(unauthorized).revokeIssuerRole(recipient.address)
       ).to.be.reverted;
     });
   });

@@ -22,8 +22,6 @@ export default async function handler(req, res) {
         id: user.id,
         walletAddress: user.wallet_address,
         role: user.role,
-        username: user.username,
-        email: user.email,
         permissions: user.permissions || [],
         isActive: user.is_active !== false,
         lastActive: user.last_active,
@@ -39,8 +37,8 @@ export default async function handler(req, res) {
     // Add role-specific redirects
     const roleRoutes = {
       admin: "/admin",
-      issuer: "/issuer",
-      holder: "/holder",
+      issuer: "/dashboard",
+      holder: "/dashboard",
     };
 
     response.redirectTo = roleRoutes[user.role] || "/login";

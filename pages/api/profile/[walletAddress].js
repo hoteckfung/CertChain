@@ -27,7 +27,6 @@ export default async function handler(req, res) {
         return res.status(200).json({
           wallet_address: walletAddress.toLowerCase(),
           full_name: "",
-          email: "",
           phone_number: "",
           privacy_settings: {
             public_profile: true,
@@ -59,16 +58,11 @@ export default async function handler(req, res) {
       });
     } else if (req.method === "PUT") {
       // Update profile
-      const { full_name, email, phone_number, privacy_settings } = req.body;
+      const { full_name, phone_number, privacy_settings } = req.body;
 
       // Validate required fields
       if (!full_name) {
         return res.status(400).json({ error: "Full name is required" });
-      }
-
-      // Validate email format if provided
-      if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-        return res.status(400).json({ error: "Invalid email format" });
       }
 
       // Validate phone number format if provided (basic validation)
@@ -85,7 +79,6 @@ export default async function handler(req, res) {
       const profileData = {
         wallet_address: walletAddress,
         full_name: full_name.trim(),
-        email: email ? email.trim() : null,
         phone_number: phone_number ? phone_number.trim() : null,
         privacy_settings: privacy_settings || {
           public_profile: true,

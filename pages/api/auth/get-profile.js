@@ -59,8 +59,6 @@ export default async function handler(req, res) {
       id: user.id,
       wallet_address: user.wallet_address,
       role: user.role,
-      name: user.username,
-      email: user.email,
       permissions,
       is_active: user.is_active,
       created_at: user.created_at,

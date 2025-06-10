@@ -14,23 +14,8 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: "Wallet address is required" });
     }
 
-    // Get client IP and user agent for logging
-    const ip_address =
-      req.headers["x-forwarded-for"] ||
-      req.headers["x-real-ip"] ||
-      req.connection.remoteAddress ||
-      req.socket.remoteAddress ||
-      (req.connection.socket ? req.connection.socket.remoteAddress : null) ||
-      "127.0.0.1";
-
-    const user_agent = req.headers["user-agent"] || "Unknown";
-
     // Login or create user
-    const { user, error } = await loginUser(walletAddress, {
-      ...userData,
-      ip_address,
-      user_agent,
-    });
+    const { user, error } = await loginUser(walletAddress, userData);
 
     if (error || !user) {
       // Log failed login attempt
@@ -39,9 +24,7 @@ export default async function handler(req, res) {
         action: "login_failed",
         details: `Failed login attempt for wallet: ${walletAddress}. Error: ${error}`,
         wallet_address: walletAddress,
-        severity: "warning",
-        ip_address,
-        user_agent,
+        category: "authentication",
       });
 
       return res.status(401).json({
@@ -71,28 +54,20 @@ export default async function handler(req, res) {
       action: "user_login",
       details: `User logged in successfully. Role: ${user.role}`,
       wallet_address: user.wallet_address,
-      severity: "info",
-      ip_address,
-      user_agent,
+      category: "authentication",
     });
 
-    // Return user data (excluding sensitive information)
-    const responseUser = {
-      id: user.id,
-      walletAddress: user.wallet_address,
-      role: user.role,
-      username: user.username,
-      email: user.email,
-      permissions: user.permissions || [],
-      isActive: user.is_active !== false,
-      lastActive: user.last_active,
-      createdAt: user.created_at,
-    };
-
+    // Return user data without sensitive information
     res.status(200).json({
       success: true,
-      user: responseUser,
-      message: user.id ? "Login successful" : "Account created and logged in",
+      message: "Login successful",
+      user: {
+        id: user.id,
+        wallet_address: user.wallet_address,
+        role: user.role,
+        // Add other relevant fields as needed, but not sensitive ones
+      },
+      redirectTo: "/dashboard",
     });
   } catch (error) {
     console.error("Login API error:", error);
@@ -103,12 +78,7 @@ export default async function handler(req, res) {
       action: "system_error",
       details: `Login API error: ${error.message}`,
       wallet_address: req.body?.walletAddress || null,
-      severity: "error",
-      ip_address:
-        req.headers["x-forwarded-for"] ||
-        req.connection.remoteAddress ||
-        "127.0.0.1",
-      user_agent: req.headers["user-agent"] || "Unknown",
+      category: "system_event",
     });
 
     res.status(500).json({

@@ -22,148 +22,153 @@ export default async function handler(req, res) {
     }
 
     if (req.method === "GET") {
-      // Get all users
-      const { data: users, error: fetchError } = await mysql.getAllUsers();
+      // Get query parameters for filtering
+      const { role, detailed } = req.query;
 
-      if (fetchError) {
-        return res.status(500).json({ error: "Failed to fetch users" });
+      let usersData;
+
+      if (detailed === "true") {
+        // Use the new admin overview function for detailed data
+        const { data: users, error: fetchError } =
+          await mysql.getAdminUserOverview(role);
+
+        if (fetchError) {
+          console.error("Failed to fetch detailed users:", fetchError);
+          return res.status(500).json({
+            error: "Failed to fetch users",
+            details: fetchError.message,
+          });
+        }
+
+        usersData = users;
+      } else {
+        // Use basic user fetch for simpler data
+        const { data: users, error: fetchError } = await mysql.getAllUsers(
+          role
+        );
+
+        if (fetchError) {
+          console.error("Failed to fetch users:", fetchError);
+          return res.status(500).json({
+            error: "Failed to fetch users",
+            details: fetchError.message,
+          });
+        }
+
+        usersData = users;
       }
 
-      return res.status(200).json({
-        success: true,
-        users,
-      });
-    } else if (req.method === "PUT") {
-      // Update user role
-      const { userId, newRole } = req.body;
-
-      if (!userId || !newRole) {
-        return res
-          .status(400)
-          .json({ error: "User ID and new role are required" });
-      }
-
-      if (!Object.values(ROLES).includes(newRole)) {
-        return res.status(400).json({ error: "Invalid role" });
-      }
-
-      // Get user data before update for cache clearing
-      const { data: allUsers } = await mysql.getAllUsers();
-      const targetUser = allUsers.find((u) => u.id === parseInt(userId));
-
-      if (!targetUser) {
-        return res.status(404).json({ error: "User not found" });
-      }
-
-      // Update user role
-      const { error: updateError } = await mysql.updateUserRole(
-        userId,
-        newRole
-      );
-
-      if (updateError) {
-        return res.status(500).json({ error: "Failed to update user role" });
-      }
-
-      // Clear user cache to force fresh data on next request
-      clearUserCache(targetUser.wallet_address);
-
-      // Get updated user data
-      const { data: users } = await mysql.getAllUsers();
-      const updatedUser = users.find((u) => u.id === parseInt(userId));
-
-      // Log the role change activity
+      // Log the admin activity
       await mysql.logActivity({
         user_id: user.id,
-        action: "role_changed",
-        details: `Changed user ${
-          updatedUser.username || updatedUser.wallet_address
-        } role to ${newRole}`,
+        action: "admin_view_users",
+        entity_type: "user",
+        details: `Admin viewed user list${
+          role ? ` filtered by role: ${role}` : ""
+        }`,
         wallet_address: user.wallet_address,
-      });
-
-      // Log activity for the user whose role was changed
-      await mysql.logActivity({
-        user_id: userId,
-        action: "role_updated",
-        details: `Role updated to ${newRole} by admin`,
-        wallet_address: updatedUser.wallet_address,
+        category: "user_management",
       });
 
       return res.status(200).json({
         success: true,
-        message: "User role updated successfully",
-        user: updatedUser,
+        users: usersData,
+        totalUsers: usersData.length,
+        filters: { role: role || "all", detailed: detailed === "true" },
+      });
+    } else if (req.method === "PUT") {
+      // Role updates are now managed through blockchain only
+      return res.status(400).json({
+        error: "Role management has been moved to blockchain",
+        message:
+          "Roles are now managed exclusively through smart contract. Use the grant-issuer-role script or smart contract admin functions.",
+        blockchainInfo: {
+          contractAddress: process.env.NEXT_PUBLIC_CONTRACT_ADDRESS,
+          grantIssuerScript:
+            "npx hardhat run scripts/grant-issuer-role.js --network ganache",
+          revokeIssuerScript: "Use smart contract admin functions",
+        },
       });
     } else if (req.method === "DELETE") {
       // Delete user
-      console.log("DELETE request received, body:", req.body);
       const { userId } = req.body;
 
       if (!userId) {
-        console.log("No userId provided");
         return res.status(400).json({ error: "User ID is required" });
       }
 
-      console.log("Attempting to delete user:", userId);
-
-      // Get user data before deletion for logging
-      const { data: allUsers } = await mysql.getAllUsers();
-      const targetUser = allUsers.find((u) => u.id === parseInt(userId));
-
+      // Get the target user first
+      const { data: targetUser } = await mysql.getUserByWalletAddress(userId);
       if (!targetUser) {
         return res.status(404).json({ error: "User not found" });
       }
 
       // Prevent admin from deleting themselves
-      if (
-        targetUser.wallet_address.toLowerCase() ===
-        user.wallet_address.toLowerCase()
-      ) {
-        return res.status(400).json({ error: "Cannot delete yourself" });
+      if (targetUser.id === user.id) {
+        return res.status(400).json({
+          error: "Cannot delete your own account",
+        });
       }
 
-      try {
-        // Delete user from database
-        const { error: deleteError } = await mysql.deleteUser(userId);
+      // Delete the user
+      const { error: deleteError } = await mysql.deleteUser(targetUser.id);
 
-        if (deleteError) {
-          console.error("Delete user error:", deleteError);
-          return res.status(500).json({
-            error: "Failed to delete user",
-            details: deleteError.message || "Database error",
-          });
-        }
-
-        // Clear user cache
-        clearUserCache(targetUser.wallet_address);
-
-        // Log the user deletion activity
-        await mysql.logActivity({
-          user_id: user.id,
-          action: "user_deleted",
-          details: `Deleted user ${
-            targetUser.username || targetUser.wallet_address
-          }`,
-          wallet_address: user.wallet_address,
-        });
-      } catch (dbError) {
-        console.error("Database deletion error:", dbError);
+      if (deleteError) {
+        console.error("Failed to delete user:", deleteError);
         return res.status(500).json({
-          error: "Database error during deletion",
-          details: dbError.message,
+          error: "Failed to delete user",
+          details: deleteError.message,
         });
       }
+
+      // Clear user cache
+      clearUserCache(userId);
+
+      // Log the deletion activity
+      await mysql.logActivity({
+        user_id: user.id,
+        action: "user_deleted",
+        entity_type: "user",
+        entity_id: targetUser.id.toString(),
+        details: `Admin deleted user account: ${targetUser.wallet_address}`,
+        wallet_address: user.wallet_address,
+        target_wallet_address: targetUser.wallet_address,
+        category: "user_management",
+      });
 
       return res.status(200).json({
         success: true,
         message: "User deleted successfully",
+        deletedUser: {
+          id: targetUser.id,
+          wallet_address: targetUser.wallet_address,
+          role: targetUser.role,
+        },
       });
     } else {
       return res.status(405).json({ error: "Method not allowed" });
     }
   } catch (error) {
     console.error("Admin users API error:", error);
-    return res.status(500).json({ error: "Internal server error" });
+
+    // Log the error
+    try {
+      await mysql.logActivity({
+        user_id: user?.id || null,
+        action: "admin_api_error",
+        entity_type: "system",
+        details: `Admin users API error: ${error.message}`,
+        wallet_address: user?.wallet_address || null,
+        category: "system_event",
+      });
+    } catch (logError) {
+      console.error("Failed to log error:", logError);
+    }
+
+    return res.status(500).json({
+      error: "Internal server error",
+      details:
+        process.env.NODE_ENV === "development" ? error.message : undefined,
+    });
   }
 }

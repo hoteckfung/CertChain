@@ -7,8 +7,9 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
+    "setup": "npm run db:setup && echo '\n🚀 CertChain is ready! Run: npm run dev'",
     "db:setup": "node scripts/setup-database.js",
-    "db:test": "node -e \"fetch('http://localhost:3000/api/db-test').then(r=>r.json()).then(console.log)\"",
+    "db:reset": "node scripts/setup-database.js --force",
     "db:logs": "node -e \"fetch('http://localhost:3000/api/admin/activity-logs').then(r=>r.json()).then(d=>console.log(JSON.stringify(d,null,2)))\""
   },
   "dependencies": {

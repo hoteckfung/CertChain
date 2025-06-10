@@ -27,14 +27,10 @@ export default async function handler(req, res) {
     await mysql.logActivity({
       user_id: null, // We'll update this if we have the user ID
       action: "last_login_updated",
+      entity_type: "user",
       details: "User last login timestamp updated",
       wallet_address: walletAddress,
-      severity: "info",
-      ip_address:
-        req.headers["x-forwarded-for"] ||
-        req.connection.remoteAddress ||
-        "127.0.0.1",
-      user_agent: req.headers["user-agent"] || "Unknown",
+      category: "authentication",
     });
 
     res.status(200).json({
