@@ -20,7 +20,7 @@ Get CertChain running with a simple 4-step process!
 
 ```bash
 git clone https://github.com/hoteckfung/CertChain.git
-cd V2
+
 npm install
 ```
 
