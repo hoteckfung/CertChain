@@ -32,7 +32,7 @@ export default function Login() {
       const role = user.role;
       switch (role) {
         case "admin":
-          router.push("/admin");
+          router.push("/dashboard");
           break;
         case "issuer":
         case "holder":

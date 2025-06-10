@@ -38,7 +38,7 @@ const Footer = () => {
           <FooterColumn
             title="User Types"
             links={[
-              { label: "System Admin", href: "/admin" },
+              { label: "System Admin", href: "/dashboard" },
               { label: "Certificate Issuer", href: "/dashboard" },
               { label: "Certificate Holder", href: "/dashboard" },
               { label: "Certificate Verifier", href: "/verify" },
