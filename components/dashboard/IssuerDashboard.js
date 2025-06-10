@@ -1,14 +1,16 @@
 import React, { useState, useEffect, useRef } from "react";
-import {
-  uploadToPinata,
-  getIPFSUrl,
-  testAuthentication,
-} from "../../utils/ipfs";
+import { getIPFSUrl, testAuthentication, uploadToIPFS } from "../../utils/ipfs";
 import useNotification from "../../utils/useNotification";
 import Notification from "../Notification";
 import SignaturePad from "../SignaturePad";
 import DraggableElement from "../DraggableElement";
-import { connectWallet, issueCertificateOnChain } from "../../utils/contract";
+import {
+  connectWallet,
+  issueCertificateOnChain,
+  revokeCertificate,
+  unpauseContract,
+  getContractStatus,
+} from "../../utils/contract";
 import Button from "../Button";
 
 export default function IssuerDashboard({ activeTab }) {
@@ -22,6 +24,13 @@ export default function IssuerDashboard({ activeTab }) {
     showInfo,
     showWarning,
   } = useNotification();
+
+  // Revoke certificate state
+  const [revokeConfirmModal, setRevokeConfirmModal] = useState({
+    show: false,
+    certificate: null,
+  });
+  const [isRevoking, setIsRevoking] = useState(false);
 
   // State for various functionalities
   const [selectedFile, setSelectedFile] = useState(null);
@@ -44,7 +53,7 @@ export default function IssuerDashboard({ activeTab }) {
   const [leftSignatureName, setLeftSignatureName] = useState("");
   const [rightSignature, setRightSignature] = useState("");
   const [rightSignatureName, setRightSignatureName] = useState("");
-  const [certificateId, setCertificateId] = useState("");
+
   const [certificateTemplate, setCertificateTemplate] = useState(null);
   const [isEditMode, setIsEditMode] = useState(false);
   const [previewVisible, setPreviewVisible] = useState(true);
@@ -75,6 +84,13 @@ export default function IssuerDashboard({ activeTab }) {
   const [isConnectingWallet, setIsConnectingWallet] = useState(false);
   const [contractAddress, setContractAddress] = useState("");
 
+  // Blockchain connection state
+  const [isWalletConnected, setIsWalletConnected] = useState(false);
+  const [isIssuer, setIsIssuer] = useState(false);
+  const [contractPaused, setContractPaused] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [isCheckingStatus, setIsCheckingStatus] = useState(false);
+
   // Refs
   const certificateContainerRef = useRef(null);
 
@@ -88,10 +104,9 @@ export default function IssuerDashboard({ activeTab }) {
     rightSignature: { x: 300, y: 320 },
   });
 
-  // Check wallet connection on mount
+  // Load certificates and check blockchain status on component mount
   useEffect(() => {
-    checkWalletConnection();
-    loadContractAddress();
+    checkBlockchainStatus(); // Check blockchain status on component mount
   }, []);
 
   const checkWalletConnection = async () => {
@@ -180,7 +195,7 @@ export default function IssuerDashboard({ activeTab }) {
 
     try {
       const fileName = `certificate_${Date.now()}`;
-      const result = await uploadToPinata(certificateFile, fileName);
+      const result = await uploadToIPFS(certificateFile, fileName);
       setIpfsHash(result.hash);
 
       if (!certificateName) {
@@ -218,6 +233,17 @@ export default function IssuerDashboard({ activeTab }) {
     try {
       showInfo("Issuing certificate on blockchain...");
 
+      console.log("🔍 DEBUG: Starting certificate issuance with:", {
+        recipientAddress: holderAddress,
+        ipfsHash: ipfsHash,
+        certificateType: "Certificate",
+        recipientName: "New Recipient",
+        issuerName: institutionName,
+        walletConnected,
+        walletAddress,
+        contractAddress,
+      });
+
       const result = await issueCertificateOnChain({
         recipientAddress: holderAddress,
         ipfsHash: ipfsHash,
@@ -226,11 +252,29 @@ export default function IssuerDashboard({ activeTab }) {
         issuerName: institutionName,
       });
 
+      console.log("🔍 DEBUG: Blockchain result:", result);
+
       if (!result.success) {
+        console.error("🚨 DEBUG: Blockchain call failed:", result.error);
+
+        // Handle user rejection gracefully
+        if (
+          result.error &&
+          result.error.includes("Transaction was rejected by user")
+        ) {
+          showInfo("Transaction was cancelled. No certificate was issued.");
+          return; // Exit early without showing error
+        }
+
         throw new Error(
           result.error || "Failed to issue certificate on blockchain"
         );
       }
+
+      console.log(
+        "✅ DEBUG: Certificate issued successfully with tokenId:",
+        result.tokenId
+      );
 
       const newCertificate = {
         id: `cert-${result.tokenId}`,
@@ -248,7 +292,18 @@ export default function IssuerDashboard({ activeTab }) {
         blockNumber: result.blockNumber,
       };
 
+      console.log("🔍 DEBUG: Created certificate object:", newCertificate);
+
       setIssuedCertificates([newCertificate, ...issuedCertificates]);
+
+      // Store in localStorage
+      const storedCertificates = JSON.parse(
+        localStorage.getItem("issuedCertificates") || "[]"
+      );
+      localStorage.setItem(
+        "issuedCertificates",
+        JSON.stringify([newCertificate, ...storedCertificates])
+      );
 
       // Clear form
       setHolderAddress("");
@@ -262,7 +317,26 @@ export default function IssuerDashboard({ activeTab }) {
         `Certificate issued successfully! Token ID: ${result.tokenId}`
       );
     } catch (error) {
-      console.error("Error issuing certificate:", error);
+      console.error("🚨 DEBUG: Error issuing certificate:", error);
+      console.error("🚨 DEBUG: Error details:", {
+        message: error.message,
+        stack: error.stack,
+        cause: error.cause,
+      });
+
+      // Handle user rejection gracefully even if thrown as exception
+      if (
+        error.code === "ACTION_REJECTED" ||
+        error.code === 4001 ||
+        error.message.includes("user rejected") ||
+        error.message.includes("User denied transaction") ||
+        error.message.includes("ACTION_REJECTED") ||
+        (error.info && error.info.error && error.info.error.code === 4001)
+      ) {
+        showInfo("Transaction was cancelled. No certificate was issued.");
+        return; // Exit early without showing error
+      }
+
       showError(`Failed to issue certificate: ${error.message}`);
     } finally {
       setIssuingCertificate(false);
@@ -472,28 +546,6 @@ export default function IssuerDashboard({ activeTab }) {
     setPreviewVisible(!previewVisible);
   };
 
-  // Function to generate a certificate ID based on recipient details
-  const generateCertificateId = (recipientName, issuerName, issueDate) => {
-    const input = `${recipientName}|${issuerName}|${issueDate}|${Date.now()}`;
-    let hash = "";
-    const chars =
-      "QWERTYUIOPASDFGHJKLZXCVBNMqwertyuiopasdfghjklzxcvbnm123456789";
-
-    let seed = 0;
-    for (let i = 0; i < input.length; i++) {
-      seed = ((seed << 5) - seed + input.charCodeAt(i)) & 0xffffffff;
-    }
-
-    for (let i = 0; i < 44; i++) {
-      const variation = seed + i * 1234567 + input.charCodeAt(i % input.length);
-      const index = Math.abs(variation) % chars.length;
-      hash += chars[index];
-      seed = (seed * 1103515245 + 12345) & 0xffffffff;
-    }
-
-    return `Qm${hash}`;
-  };
-
   // Generate certificate PDF
   const generateCertificatePDF = async () => {
     if (!recipientName || !certificateTitle || !issuerName) {
@@ -597,13 +649,9 @@ export default function IssuerDashboard({ activeTab }) {
   };
 
   // Helper function to update DOM content directly and wait for changes
-  const updateCertificateContentAndCapture = async (
-    recipientNameValue,
-    certificateIdValue
-  ) => {
+  const updateCertificateContentAndCapture = async (recipientNameValue) => {
     return new Promise((resolve) => {
       setRecipientName(recipientNameValue);
-      setCertificateId(certificateIdValue);
 
       requestAnimationFrame(() => {
         requestAnimationFrame(() => {
@@ -646,26 +694,14 @@ export default function IssuerDashboard({ activeTab }) {
       showInfo(`Generating ${processedExcelData.length} certificates...`);
 
       const originalName = recipientName;
-      const originalCertId = certificateId;
 
       for (let i = 0; i < processedExcelData.length; i++) {
         const recipient = processedExcelData[i];
 
-        const recipientNameForId =
-          recipient.Name || recipient.name || `Recipient ${i + 1}`;
-        const uniqueHash = generateCertificateId(
-          recipientNameForId,
-          issuerName,
-          issueDate
-        );
-
         const currentRecipientName =
           recipient.Name || recipient.name || `Recipient ${i + 1}`;
 
-        await updateCertificateContentAndCapture(
-          currentRecipientName,
-          uniqueHash
-        );
+        await updateCertificateContentAndCapture(currentRecipientName);
 
         const certificateElement = certificateContainerRef.current;
         if (!certificateElement) continue;
@@ -739,7 +775,6 @@ export default function IssuerDashboard({ activeTab }) {
       }
 
       setRecipientName(originalName);
-      setCertificateId(originalCertId);
 
       showSuccess(
         `Successfully generated ${processedExcelData.length} certificates!`
@@ -748,7 +783,6 @@ export default function IssuerDashboard({ activeTab }) {
       console.error("Error generating bulk certificates:", error);
       showError(`Error generating bulk certificates: ${error.message}`);
       setRecipientName(originalName);
-      setCertificateId(originalCertId);
     }
   };
 
@@ -783,10 +817,149 @@ export default function IssuerDashboard({ activeTab }) {
     }
   }, []);
 
+  // Handle certificate revocation
+  const handleRevokeCertificate = async (certificate) => {
+    if (!certificate.tokenId) {
+      showError("Cannot revoke certificate: Token ID not found");
+      return;
+    }
+
+    setIsRevoking(true);
+
+    // Handle user rejection at the lowest level - catch the raw error immediately
+    try {
+      showInfo("Revoking certificate on blockchain...");
+
+      // Wrap the call in its own try-catch to intercept user rejections immediately
+      let result;
+      try {
+        result = await revokeCertificate(certificate.tokenId);
+      } catch (rawError) {
+        console.log("Raw error caught in dashboard:", rawError);
+
+        // Check for user rejection patterns in the raw error
+        const isUserRejection =
+          rawError.code === "ACTION_REJECTED" ||
+          rawError.code === 4001 ||
+          rawError.message.includes("user rejected") ||
+          rawError.message.includes("User denied transaction") ||
+          rawError.message.includes("ACTION_REJECTED") ||
+          rawError.message.includes("ethers-user-denied") ||
+          rawError.message.includes(
+            "MetaMask Tx Signature: User denied transaction signature"
+          ) ||
+          rawError.reason === "rejected" ||
+          (rawError.info &&
+            rawError.info.error &&
+            rawError.info.error.code === 4001) ||
+          (rawError.info &&
+            rawError.info.error &&
+            rawError.info.error.message &&
+            rawError.info.error.message.includes("User denied"));
+
+        if (isUserRejection) {
+          showInfo("Transaction was cancelled. Certificate was not revoked.");
+          setRevokeConfirmModal({ show: false, certificate: null });
+          return;
+        }
+
+        // If not user rejection, re-throw the error
+        throw rawError;
+      }
+
+      if (!result.success) {
+        // Handle user rejection gracefully from structured response
+        if (
+          result.error &&
+          result.error.includes("Transaction was rejected by user")
+        ) {
+          showInfo("Transaction was cancelled. Certificate was not revoked.");
+          setRevokeConfirmModal({ show: false, certificate: null });
+          return;
+        }
+
+        throw new Error(result.error || "Failed to revoke certificate");
+      }
+
+      // Update the certificate status in local state
+      setIssuedCertificates((prevCerts) =>
+        prevCerts.map((cert) =>
+          cert.id === certificate.id ? { ...cert, status: "Revoked" } : cert
+        )
+      );
+
+      // Update localStorage
+      const storedCertificates = JSON.parse(
+        localStorage.getItem("issuedCertificates") || "[]"
+      );
+      const updatedStoredCerts = storedCertificates.map((cert) =>
+        cert.id === certificate.id ? { ...cert, status: "Revoked" } : cert
+      );
+      localStorage.setItem(
+        "issuedCertificates",
+        JSON.stringify(updatedStoredCerts)
+      );
+
+      showSuccess(
+        `Certificate revoked successfully! Transaction: ${result.transactionHash}`
+      );
+      setRevokeConfirmModal({ show: false, certificate: null });
+    } catch (error) {
+      console.error("Error revoking certificate:", error);
+
+      // Handle user rejection gracefully even if thrown as exception
+      console.log("Dashboard error debug:", {
+        code: error.code,
+        message: error.message,
+        info: error.info,
+      });
+
+      const isUserRejection =
+        error.code === "ACTION_REJECTED" ||
+        error.code === 4001 ||
+        error.message.includes("user rejected") ||
+        error.message.includes("User denied transaction") ||
+        error.message.includes("ACTION_REJECTED") ||
+        error.message.includes("ethers-user-denied") ||
+        error.message.includes(
+          "MetaMask Tx Signature: User denied transaction signature"
+        ) ||
+        error.reason === "rejected" ||
+        (error.info && error.info.error && error.info.error.code === 4001) ||
+        (error.info &&
+          error.info.error &&
+          error.info.error.message &&
+          error.info.error.message.includes("User denied"));
+
+      console.log("Dashboard: Is user rejection?", isUserRejection);
+
+      if (isUserRejection) {
+        showInfo("Transaction was cancelled. Certificate was not revoked.");
+        setRevokeConfirmModal({ show: false, certificate: null });
+        return;
+      }
+
+      showError(`Failed to revoke certificate: ${error.message}`);
+    } finally {
+      setIsRevoking(false);
+    }
+  };
+
+  const openRevokeConfirmation = (certificate) => {
+    setRevokeConfirmModal({ show: true, certificate });
+  };
+
+  const closeRevokeConfirmation = () => {
+    setRevokeConfirmModal({ show: false, certificate: null });
+  };
+
   const renderBlockchainStatus = () => (
     <div className="bg-white rounded-lg shadow-sm p-6 mb-8">
       <h2 className="text-lg font-semibold mb-4 flex items-center">
         🔗 Blockchain Status
+        {isCheckingStatus && (
+          <span className="ml-2 text-sm text-gray-500">Checking...</span>
+        )}
       </h2>
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {/* Wallet Connection */}
@@ -795,22 +968,22 @@ export default function IssuerDashboard({ activeTab }) {
             <p className="text-sm text-gray-600">Wallet</p>
             <p
               className={`font-medium ${
-                walletConnected ? "text-green-600" : "text-red-600"
+                isWalletConnected ? "text-green-600" : "text-red-600"
               }`}>
-              {walletConnected ? "Connected" : "Not Connected"}
+              {isWalletConnected ? "Connected" : "Not Connected"}
             </p>
-            {walletConnected && walletAddress && (
+            {isWalletConnected && walletAddress && (
               <p className="text-xs text-gray-500 mt-1">
                 {walletAddress.slice(0, 6)}...{walletAddress.slice(-4)}
               </p>
             )}
           </div>
-          {!walletConnected && (
+          {!isWalletConnected && (
             <button
-              onClick={handleConnectWallet}
-              disabled={isConnectingWallet}
+              onClick={checkBlockchainStatus}
+              disabled={isCheckingStatus}
               className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-blue-700 disabled:opacity-50">
-              {isConnectingWallet ? "Connecting..." : "Connect Wallet"}
+              {isCheckingStatus ? "Connecting..." : "Connect Wallet"}
             </button>
           )}
         </div>
@@ -837,21 +1010,38 @@ export default function IssuerDashboard({ activeTab }) {
           </div>
         </div>
 
-        {/* Network Info */}
+        {/* Contract Pause Status */}
         <div className="flex items-center justify-between p-4 border rounded-lg">
           <div>
-            <p className="text-sm text-gray-600">Network</p>
-            <p className="font-medium text-blue-600">
-              {process.env.NEXT_PUBLIC_CHAIN_ID === "31337"
-                ? "Local Hardhat"
-                : process.env.NEXT_PUBLIC_CHAIN_ID === "11155111"
-                ? "Sepolia Testnet"
-                : "Ethereum"}
+            <p className="text-sm text-gray-600">Contract Status</p>
+            <p
+              className={`font-medium ${
+                contractPaused ? "text-red-600" : "text-green-600"
+              }`}>
+              {contractPaused ? (
+                <>
+                  <i className="bx bx-pause-circle"></i> Paused
+                </>
+              ) : (
+                <>
+                  <i className="bx bx-play-circle"></i> Active
+                </>
+              )}
             </p>
-            <p className="text-xs text-gray-500 mt-1">
-              Chain ID: {process.env.NEXT_PUBLIC_CHAIN_ID || "31337"}
-            </p>
+            {contractPaused && (
+              <p className="text-xs text-gray-500 mt-1">
+                Certificate issuance disabled
+              </p>
+            )}
           </div>
+          {contractPaused && isAdmin && (
+            <button
+              onClick={handleUnpauseContract}
+              disabled={isCheckingStatus}
+              className="bg-green-600 text-white px-3 py-1 rounded text-sm hover:bg-green-700 disabled:opacity-50">
+              {isCheckingStatus ? "..." : "Unpause"}
+            </button>
+          )}
         </div>
       </div>
 
@@ -864,8 +1054,105 @@ export default function IssuerDashboard({ activeTab }) {
           </p>
         </div>
       )}
+
+      {contractPaused && (
+        <div className="mt-4 p-4 bg-red-50 border border-red-200 rounded-lg">
+          <p className="text-red-800 text-sm">
+            🚨 <strong>Contract is paused.</strong> Certificate issuance is
+            currently disabled.
+            {isAdmin
+              ? " Click the Unpause button above to resume operations."
+              : " Contact an admin to unpause the contract."}
+          </p>
+        </div>
+      )}
+
+      {!isWalletConnected && (
+        <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+          <p className="text-blue-800 text-sm">
+            ℹ️ <strong>Connect your wallet</strong> to check your issuer role
+            and begin issuing certificates.
+          </p>
+        </div>
+      )}
     </div>
   );
+
+  const checkBlockchainStatus = async () => {
+    setIsCheckingStatus(true);
+    try {
+      const result = await connectWallet();
+      if (result.success) {
+        setWalletAddress(result.address);
+        setIsWalletConnected(true);
+        setIsIssuer(result.isIssuer);
+        setIsAdmin(result.isAdmin);
+        setContractAddress(result.contractAddress);
+
+        // Check contract status (paused state)
+        const statusResult = await getContractStatus();
+        if (statusResult.success) {
+          setContractPaused(statusResult.isPaused);
+        }
+      } else {
+        setIsWalletConnected(false);
+        setWalletAddress("");
+        setIsIssuer(false);
+        setIsAdmin(false);
+        setContractPaused(false);
+        setContractAddress("");
+      }
+    } catch (error) {
+      console.error("Error checking blockchain status:", error);
+      setIsWalletConnected(false);
+    } finally {
+      setIsCheckingStatus(false);
+    }
+  };
+
+  const handleUnpauseContract = async () => {
+    setIsCheckingStatus(true);
+    try {
+      showInfo("Unpausing contract...");
+      const result = await unpauseContract();
+
+      if (result.success) {
+        showSuccess("Contract unpaused successfully!");
+        // Refresh blockchain status
+        await checkBlockchainStatus();
+      } else {
+        // Handle user rejection gracefully
+        if (
+          result.error &&
+          result.error.includes("Transaction was rejected by user")
+        ) {
+          showInfo("Transaction was cancelled. Contract remains paused.");
+          return; // Exit early without showing error
+        }
+
+        showError(`Failed to unpause contract: ${result.error}`);
+      }
+    } catch (error) {
+      console.error("Error unpausing contract:", error);
+
+      // Handle user rejection gracefully even if thrown as exception
+      if (
+        error.code === "ACTION_REJECTED" ||
+        error.code === 4001 ||
+        error.message.includes("user rejected") ||
+        error.message.includes("User denied transaction") ||
+        error.message.includes("ACTION_REJECTED") ||
+        (error.info && error.info.error && error.info.error.code === 4001)
+      ) {
+        showInfo("Transaction was cancelled. Contract remains paused.");
+        return; // Exit early without showing error
+      }
+
+      showError("Failed to unpause contract");
+    } finally {
+      setIsCheckingStatus(false);
+    }
+  };
 
   return (
     <>
@@ -1030,104 +1317,441 @@ export default function IssuerDashboard({ activeTab }) {
                 Design and create certificates directly on the web app.
               </p>
 
-              {/* Basic form for certificate creation */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                <div>
+              {/* Certificate details form */}
+              <div className="border-t border-gray-200 pt-4 mb-6">
+                <h3 className="text-lg font-medium mb-4">Certificate Detail</h3>
+
+                <div className="mb-4">
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Recipient Name *
+                    Certificate Template
                   </label>
-                  <input
-                    type="text"
+                  <div className="border-2 border-dashed border-gray-300 rounded-md p-4 text-center">
+                    {certificateTemplate ? (
+                      <div className="mb-2">
+                        <img
+                          src={certificateTemplate}
+                          alt="Certificate Template"
+                          className="max-h-40 mx-auto"
+                        />
+                      </div>
+                    ) : (
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        className="h-12 w-12 mx-auto mb-2 text-gray-400"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor">
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"
+                        />
+                      </svg>
+                    )}
+
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      id="template-upload"
+                      onChange={handleTemplateUpload}
+                    />
+                    <label
+                      htmlFor="template-upload"
+                      className="mt-2 inline-block px-4 py-2 bg-primary-blue text-white rounded-md cursor-pointer hover:bg-blue-700 transition-colors">
+                      {certificateTemplate
+                        ? "Change Template"
+                        : "Upload Template"}
+                    </label>
+                  </div>
+                  <p className="text-xs text-gray-500 mt-1">
+                    Upload a certificate template image (PNG or JPG) exported
+                    from Canva or any design tool
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Recipient Name *
+                    </label>
+                    <input
+                      type="text"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-blue"
+                      value={recipientName}
+                      onChange={(e) => setRecipientName(e.target.value)}
+                      placeholder="Full Name"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Issue Date *
+                    </label>
+                    <input
+                      type="date"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-blue"
+                      value={issueDate}
+                      onChange={(e) => setIssueDate(e.target.value)}
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Certificate Title *
+                    </label>
+                    <input
+                      type="text"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-blue"
+                      value={certificateTitle}
+                      onChange={(e) => setCertificateTitle(e.target.value)}
+                      placeholder="e.g., Bachelor of Computer Science"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Issuing Institution *
+                    </label>
+                    <input
+                      type="text"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-blue"
+                      value={issuerName}
+                      onChange={(e) => setIssuerName(e.target.value)}
+                      placeholder="Institution Name"
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-700">
+                    Description
+                  </label>
+                  <textarea
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-blue"
-                    value={recipientName}
-                    onChange={(e) => setRecipientName(e.target.value)}
-                    placeholder="Full Name"
-                    required
+                    rows="3"
+                    value={certificateDescription}
+                    onChange={(e) => setCertificateDescription(e.target.value)}
+                    placeholder="Describe what the certificate is for"
                   />
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Issue Date *
-                  </label>
-                  <input
-                    type="date"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-blue"
-                    value={issueDate}
-                    onChange={(e) => setIssueDate(e.target.value)}
-                    required
-                  />
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-4">
+                  <div>
+                    <div className="mb-2">
+                      <label className="block text-sm font-medium text-gray-700">
+                        Left Signature
+                      </label>
+                      <div className="mt-1">
+                        <input
+                          type="text"
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-blue mb-2"
+                          value={leftSignatureName}
+                          onChange={(e) => setLeftSignatureName(e.target.value)}
+                          placeholder="Signer name"
+                        />
+                      </div>
+                    </div>
+                    <SignaturePad
+                      onSignatureChange={setLeftSignature}
+                      label="Signature"
+                    />
+                  </div>
+                  <div>
+                    <div className="mb-2">
+                      <label className="block text-sm font-medium text-gray-700">
+                        Right Signature
+                      </label>
+                      <div className="mt-1">
+                        <input
+                          type="text"
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-blue mb-2"
+                          value={rightSignatureName}
+                          onChange={(e) =>
+                            setRightSignatureName(e.target.value)
+                          }
+                          placeholder="Signer name"
+                        />
+                      </div>
+                    </div>
+                    <SignaturePad
+                      onSignatureChange={setRightSignature}
+                      label="Signature"
+                    />
+                  </div>
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Certificate Title *
-                  </label>
-                  <input
-                    type="text"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-blue"
-                    value={certificateTitle}
-                    onChange={(e) => setCertificateTitle(e.target.value)}
-                    placeholder="e.g., Bachelor of Computer Science"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Issuing Institution *
-                  </label>
-                  <input
-                    type="text"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-blue"
-                    value={issuerName}
-                    onChange={(e) => setIssuerName(e.target.value)}
-                    placeholder="Institution Name"
-                    required
-                  />
-                </div>
+              <div className="flex space-x-4">
+                <Button
+                  onClick={handlePreviewToggle}
+                  variant="secondary"
+                  className="flex-1">
+                  {previewVisible ? "Hide Preview" : "Show Preview"}
+                </Button>
+                <Button className="flex-1" onClick={generateCertificatePDF}>
+                  Generate Certificate PDF
+                </Button>
               </div>
 
-              <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Description
-                </label>
-                <textarea
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-blue"
-                  rows="3"
-                  value={certificateDescription}
-                  onChange={(e) => setCertificateDescription(e.target.value)}
-                  placeholder="Describe what the certificate is for"
-                />
-              </div>
+              {previewVisible && (
+                <div className="mt-6 p-4 border border-gray-200 rounded-md">
+                  <div className="flex justify-between items-center mb-2">
+                    <h3 className="text-lg font-medium">Certificate Preview</h3>
+                    <div>
+                      <button
+                        type="button"
+                        onClick={toggleEditMode}
+                        className={`px-3 py-1 text-sm rounded-md ${
+                          isEditMode
+                            ? "bg-red-500 text-white"
+                            : "bg-blue-500 text-white"
+                        }`}>
+                        {isEditMode
+                          ? "Exit Positioning Mode"
+                          : "Position Elements"}
+                      </button>
+                    </div>
+                  </div>
 
-              <Button onClick={generateCertificatePDF} className="w-full">
-                Generate Certificate PDF
-              </Button>
+                  {isEditMode && (
+                    <div className="mb-3 p-2 bg-blue-50 rounded text-sm text-blue-800">
+                      <p>
+                        <strong>Positioning Mode:</strong> Drag and drop
+                        elements to position them precisely on your certificate
+                        template. Changes will be saved automatically.
+                      </p>
+                    </div>
+                  )}
+
+                  <div className="bg-gray-100 p-8 rounded-md flex items-center justify-center">
+                    <div
+                      ref={certificateContainerRef}
+                      className="bg-white shadow-lg w-full max-w-2xl aspect-[4/3] relative border border-gray-200 overflow-hidden">
+                      {certificateTemplate ? (
+                        // Display uploaded template as background
+                        <img
+                          src={certificateTemplate}
+                          alt="Certificate Template"
+                          className="absolute inset-0 w-full h-full object-cover"
+                        />
+                      ) : (
+                        // Display message to upload template
+                        <div className="absolute inset-0 flex items-center justify-center bg-gray-50">
+                          <p className="text-gray-400 text-center px-8">
+                            Upload a certificate template image to see preview
+                            with your content
+                          </p>
+                        </div>
+                      )}
+
+                      {/* Draggable elements */}
+                      {certificateTemplate && (
+                        <>
+                          <DraggableElement
+                            id="certificateTitle"
+                            position={elementPositions.certificateTitle}
+                            onPositionChange={handlePositionChange}
+                            isEditMode={isEditMode}
+                            containerRef={certificateContainerRef}
+                            className="text-center">
+                            <div
+                              className="text-2xl font-bold px-4 py-1 min-w-[200px]"
+                              style={{
+                                fontFamily: "Times New Roman, serif",
+                              }}>
+                              {certificateTitle || "Certificate Title"}
+                            </div>
+                          </DraggableElement>
+
+                          <DraggableElement
+                            id="issuerName"
+                            position={elementPositions.issuerName}
+                            onPositionChange={handlePositionChange}
+                            isEditMode={isEditMode}
+                            containerRef={certificateContainerRef}
+                            className="text-center">
+                            <div
+                              className="text-lg font-medium px-4 py-1 min-w-[200px]"
+                              style={{
+                                fontFamily: "Times New Roman, serif",
+                              }}>
+                              {issuerName || "Institution Name"}
+                            </div>
+                          </DraggableElement>
+
+                          <DraggableElement
+                            id="recipientName"
+                            position={elementPositions.recipientName}
+                            onPositionChange={handlePositionChange}
+                            isEditMode={isEditMode}
+                            containerRef={certificateContainerRef}
+                            className="text-center">
+                            <div className="text-4xl font-script px-4 py-1 min-w-[200px]">
+                              {recipientName || "Recipient Name"}
+                            </div>
+                          </DraggableElement>
+
+                          <DraggableElement
+                            id="description"
+                            position={elementPositions.description}
+                            onPositionChange={handlePositionChange}
+                            isEditMode={isEditMode}
+                            containerRef={certificateContainerRef}
+                            className="text-center">
+                            <div
+                              className="text-sm max-w-md px-4 py-1 min-w-[200px]"
+                              style={{
+                                fontFamily: "Times New Roman, serif",
+                              }}>
+                              {certificateDescription ||
+                                "Certificate Description"}
+                            </div>
+                          </DraggableElement>
+
+                          <DraggableElement
+                            id="leftSignature"
+                            position={elementPositions.leftSignature}
+                            onPositionChange={handlePositionChange}
+                            isEditMode={isEditMode}
+                            containerRef={certificateContainerRef}>
+                            <div className="text-center">
+                              {leftSignature ? (
+                                leftSignature.startsWith("data:image") ? (
+                                  <img
+                                    src={leftSignature}
+                                    alt="Signature"
+                                    className="h-10 mx-auto mb-1"
+                                  />
+                                ) : (
+                                  <div className="text-lg font-script mb-1">
+                                    {leftSignature}
+                                  </div>
+                                )
+                              ) : (
+                                <div className="text-lg font-script mb-1">
+                                  Signature
+                                </div>
+                              )}
+                              <p
+                                className="text-sm"
+                                style={{
+                                  fontFamily: "Times New Roman, serif",
+                                }}>
+                                {leftSignatureName || "Left Signer"}
+                              </p>
+                            </div>
+                          </DraggableElement>
+
+                          <DraggableElement
+                            id="rightSignature"
+                            position={elementPositions.rightSignature}
+                            onPositionChange={handlePositionChange}
+                            isEditMode={isEditMode}
+                            containerRef={certificateContainerRef}>
+                            <div className="text-center">
+                              {rightSignature ? (
+                                rightSignature.startsWith("data:image") ? (
+                                  <img
+                                    src={rightSignature}
+                                    alt="Signature"
+                                    className="h-10 mx-auto mb-1"
+                                  />
+                                ) : (
+                                  <div className="text-lg font-script mb-1">
+                                    {rightSignature}
+                                  </div>
+                                )
+                              ) : (
+                                <div className="text-lg font-script mb-1">
+                                  Signature
+                                </div>
+                              )}
+                              <p
+                                className="text-sm"
+                                style={{
+                                  fontFamily: "Times New Roman, serif",
+                                }}>
+                                {rightSignatureName || "Right Signer"}
+                              </p>
+                            </div>
+                          </DraggableElement>
+                        </>
+                      )}
+                    </div>
+                  </div>
+
+                  {isEditMode && (
+                    <div className="mt-3 flex justify-end">
+                      <button
+                        type="button"
+                        onClick={toggleEditMode}
+                        className="px-4 py-2 bg-green-500 text-white rounded-md hover:bg-green-600">
+                        Save Positions
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           </div>
 
           <div className="md:col-span-1">
-            <div className="bg-white rounded-lg shadow-sm p-6">
-              <h2 className="text-xl font-semibold mb-4">How It Works</h2>
-              <ol className="list-decimal list-inside space-y-4 text-gray-600">
-                <li>
-                  <span className="font-medium">Upload Data:</span> Use an Excel
-                  file with certificate details.
-                </li>
-                <li>
-                  <span className="font-medium">Design Certificates:</span>{" "}
-                  Choose templates and customize appearance.
-                </li>
-                <li>
-                  <span className="font-medium">Review & Generate:</span>{" "}
-                  Preview certificates and make adjustments.
-                </li>
-                <li>
-                  <span className="font-medium">Issue on Blockchain:</span>{" "}
-                  Securely issue certificates to recipients.
-                </li>
-              </ol>
+            <div className="sticky top-6 space-y-8">
+              <div className="bg-white rounded-lg shadow-sm p-6">
+                <h2 className="text-xl font-semibold mb-4">How It Works</h2>
+                <ol className="list-decimal list-inside space-y-4 text-gray-600">
+                  <li>
+                    <span className="font-medium">Upload Data:</span> Use an
+                    Excel file with certificate details.
+                  </li>
+                  <li>
+                    <span className="font-medium">Design Certificates:</span>{" "}
+                    Choose templates and customize appearance.
+                  </li>
+                  <li>
+                    <span className="font-medium">Review & Generate:</span>{" "}
+                    Preview certificates and make adjustments.
+                  </li>
+                  <li>
+                    <span className="font-medium">Issue on Blockchain:</span>{" "}
+                    Securely issue certificates to recipients.
+                  </li>
+                </ol>
+              </div>
+
+              <div className="bg-white rounded-lg shadow-sm p-6">
+                <h2 className="text-xl font-semibold mb-4">
+                  How to Use Your Own Template
+                </h2>
+                <ol className="list-decimal list-inside space-y-4 text-gray-600">
+                  <li>
+                    Design your certificate in Canva exactly how you want it to
+                    look
+                  </li>
+                  <li>
+                    Export it as a PNG (with transparent background if
+                    applicable)
+                  </li>
+                  <li>
+                    In the certificate generator, use the "Upload Template"
+                    button to upload your Canva design
+                  </li>
+                  <li>Your certificate design will appear as the background</li>
+                  <li>
+                    Click "Position Elements" to drag and place text and
+                    signatures exactly where you want them
+                  </li>
+                  <li>
+                    Click "Save Positions" when you're satisfied with the layout
+                  </li>
+                </ol>
+              </div>
             </div>
           </div>
         </div>
@@ -1470,6 +2094,79 @@ export default function IssuerDashboard({ activeTab }) {
                 </div>
               </div>
             </div>
+
+            <div className="bg-white rounded-lg shadow-sm p-6">
+              <h2 className="text-xl font-semibold mb-4">
+                How Certificate Issuance Works
+              </h2>
+              <p className="text-gray-600 mb-4">
+                Understanding the blockchain certificate issuance process,
+                costs, and requirements.
+              </p>
+
+              <div className="space-y-4 text-gray-600">
+                {/* Requirements */}
+                <div className="border border-yellow-200 bg-yellow-50 rounded-lg p-4">
+                  <div>
+                    <p className="font-medium text-yellow-800">Requirements</p>
+                    <p className="text-yellow-700">
+                      You need a connected MetaMask wallet with sufficient ETH
+                      for gas fees, a valid recipient wallet address (0x...),
+                      and a certificate file uploaded to IPFS. Ensure your
+                      wallet is connected to the correct network before issuing.
+                    </p>
+                  </div>
+                </div>
+
+                {/* Cost Information */}
+                <div className="border border-blue-200 bg-blue-50 rounded-lg p-4">
+                  <div>
+                    <p className="font-medium text-blue-800">
+                      Transaction Costs
+                    </p>
+                    <p className="text-blue-700">
+                      Only blockchain gas fees required ($0.50 - $5.00 USD).
+                      IPFS storage is free.
+                    </p>
+                  </div>
+                </div>
+
+                {/* Step by Step Guide */}
+                <div>
+                  <p className="font-medium">Step-by-Step Process</p>
+                  <div className="space-y-1">
+                    <p>
+                      1. Upload your certificate file (PDF, JPG, or PNG) to IPFS
+                      for permanent decentralized storage
+                    </p>
+                    <p>
+                      2. Enter recipient's wallet address, certificate name,
+                      institution, and completion date
+                    </p>
+                    <p>
+                      3. Connect your MetaMask wallet and confirm the blockchain
+                      transaction
+                    </p>
+                    <p>
+                      4. Certificate is minted as an NFT and permanently
+                      recorded on the blockchain
+                    </p>
+                  </div>
+                </div>
+
+                {/* What Happens After */}
+                <div>
+                  <p className="font-medium">What Happens After Issuance</p>
+                  <p>
+                    The certificate appears in the recipient's wallet as an NFT
+                    and becomes permanently verifiable on the blockchain. Anyone
+                    can verify the certificate's authenticity using the
+                    transaction hash, and the certificate file remains
+                    accessible via IPFS forever.
+                  </p>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       )}
@@ -1477,7 +2174,7 @@ export default function IssuerDashboard({ activeTab }) {
       {/* Issued Certificates Tab */}
       {activeTab === "certificates" && (
         <div className="bg-white rounded-lg shadow-sm p-6">
-          <h2 className="text-xl font-semibold mb-4">Issued Certificates</h2>
+          <h2 className="text-xl font-semibold mb-4">Issued Certificate</h2>
           <p className="text-gray-600 mb-6">
             View all certificates you have issued.
           </p>
@@ -1519,6 +2216,9 @@ export default function IssuerDashboard({ activeTab }) {
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Status
                     </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Revoke
+                    </th>
                     <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Actions
                     </th>
@@ -1548,9 +2248,30 @@ export default function IssuerDashboard({ activeTab }) {
                         {cert.issueDate}
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap">
-                        <span className="text-green-600 font-medium text-sm">
-                          ✅ {cert.status}
+                        <span
+                          className={`font-medium text-sm ${
+                            cert.status === "Revoked"
+                              ? "text-red-600"
+                              : "text-green-600"
+                          }`}>
+                          {cert.status === "Revoked"
+                            ? "🚫 Revoked"
+                            : "✅ Issued"}
                         </span>
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap">
+                        {cert.status !== "Revoked" && cert.tokenId ? (
+                          <button
+                            onClick={() => openRevokeConfirmation(cert)}
+                            disabled={isRevoking}
+                            className="bg-red-600 text-white px-3 py-1 rounded text-sm hover:bg-red-700 disabled:opacity-50">
+                            Revoke
+                          </button>
+                        ) : (
+                          <span className="text-gray-400 text-sm">
+                            {cert.status === "Revoked" ? "Revoked" : "N/A"}
+                          </span>
+                        )}
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap text-right text-sm font-medium">
                         <button
@@ -1567,6 +2288,80 @@ export default function IssuerDashboard({ activeTab }) {
               </table>
             </div>
           )}
+        </div>
+      )}
+
+      {/* Revoke Confirmation Modal */}
+      {revokeConfirmModal.show && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg w-full max-w-md p-6">
+            <div className="flex items-center mb-4">
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                className="h-8 w-8 text-red-600 mr-3"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor">
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 15.5c-.77.833.192 2.5 1.732 2.5z"
+                />
+              </svg>
+              <h2 className="text-xl font-bold text-gray-800">
+                Revoke Certificate
+              </h2>
+            </div>
+
+            <div className="mb-6">
+              <p className="text-gray-600 mb-4">
+                <strong>WARNING:</strong> This action will permanently revoke
+                the certificate on the blockchain. This cannot be undone.
+              </p>
+
+              <div className="bg-red-50 border border-red-200 rounded p-3 mb-4">
+                <p className="text-red-800 text-sm mb-2">
+                  <strong>Certificate to revoke:</strong>
+                </p>
+                <p className="text-red-700 text-sm break-words leading-relaxed">
+                  <strong>Title:</strong>{" "}
+                  {revokeConfirmModal.certificate?.title &&
+                  revokeConfirmModal.certificate.title.length > 60
+                    ? `${revokeConfirmModal.certificate.title.substring(
+                        0,
+                        60
+                      )}...`
+                    : revokeConfirmModal.certificate?.title}
+                </p>
+                <p className="text-red-700 text-sm mt-1">
+                  <strong>Holder:</strong>{" "}
+                  {revokeConfirmModal.certificate?.name}
+                </p>
+              </div>
+
+              <p className="text-gray-600">
+                Do you wish to proceed with revoking this certificate?
+              </p>
+            </div>
+
+            <div className="flex space-x-4">
+              <button
+                onClick={closeRevokeConfirmation}
+                disabled={isRevoking}
+                className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 disabled:opacity-50">
+                Cancel
+              </button>
+              <button
+                onClick={() =>
+                  handleRevokeCertificate(revokeConfirmModal.certificate)
+                }
+                disabled={isRevoking}
+                className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50">
+                {isRevoking ? "Revoking..." : "Revoke Certificate"}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </>

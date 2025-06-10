@@ -20,7 +20,7 @@ Get CertChain running with a simple 4-step process!
 
 ```bash
 git clone https://github.com/hoteckfung/CertChain.git
-cd V2
+
 npm install
 ```
 
@@ -95,7 +95,7 @@ This automatically:
 3. **Test the system**:
    - Visit: [http://localhost:3000](http://localhost:3000)
    - Connect wallet and verify role detection
-   - Access admin dashboard: [http://localhost:3000/admin](http://localhost:3000/admin)
+   - Access admin dashboard: [http://localhost:3000/dashboard](http://localhost:3000/dashboard) (admin users)
 
 ### 🎉 You're Ready!
 
@@ -535,7 +535,7 @@ The system automatically logs:
 - `VERIFICATION_PERFORMED` - Certificate verifications
 - `CONTRACT_DEPLOYED` - Smart contract deployments
 
-Access logs via the admin dashboard at `/admin`.
+Access logs via the admin dashboard at `/dashboard` (admin users).
 
 ### **Monitoring Tools**
 
@@ -544,7 +544,7 @@ Access logs via the admin dashboard at `/admin`.
 | `GET /api/health`                    | Overall system status         | `curl http://localhost:3000/api/health`  |
 | `GET /api/db-test`                   | Database connectivity         | `curl http://localhost:3000/api/db-test` |
 | `node scripts/test-db-connection.js` | Detailed database diagnostics | Terminal output with full details        |
-| `/admin/database` page               | Visual database status        | Admin UI for database monitoring         |
+| `/dashboard` (admin users)           | Visual database status        | Admin UI for database monitoring         |
 
 ---
 
@@ -644,8 +644,7 @@ CertChain/
 │   │   ├── auth/             # Authentication APIs
 │   │   ├── blockchain/       # Blockchain interaction APIs
 │   │   └── health.js         # System health check endpoint
-│   ├── admin.js              # Admin dashboard
-│   ├── dashboard.js          # User dashboard
+│   ├── dashboard.js          # Unified dashboard (all user types)
 │   ├── index.js              # Landing page
 │   ├── login.js              # Authentication page
 │   └── verify.js             # Public certificate verification

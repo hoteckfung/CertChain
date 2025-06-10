@@ -39,7 +39,7 @@ const Navbar = () => {
               </div>
               {user.role && (
                 <Link
-                  href={user.role === "admin" ? "/admin" : "/dashboard"}
+                  href="/dashboard"
                   className="text-primary-blue hover:text-blue-700 mr-4">
                   Dashboard
                 </Link>

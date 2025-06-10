@@ -47,24 +47,15 @@ async function main() {
   console.log("\n📄 Deployment Summary:");
   console.log(JSON.stringify(deploymentInfo, null, 2));
 
-  // If deploying to a testnet, print verification command
-  if (hre.network.name !== "hardhat" && hre.network.name !== "localhost") {
-    console.log("\n🔍 To verify the contract, run:");
-    console.log(
-      `npx hardhat verify --network ${
-        hre.network.name
-      } ${await certificateNFT.getAddress()}`
-    );
-  }
-
-  // Auto-update environment files
-  updateEnvFile(await certificateNFT.getAddress());
+  // Console log the command to update contract address
+  console.log(`\n📝 To update contract address, run:`);
+  console.log(
+    `node scripts/update-contract-address.js ${await certificateNFT.getAddress()}`
+  );
 
   return certificateNFT;
 }
 
-// We recommend this pattern to be able to use async/await everywhere
-// and properly handle errors.
 main()
   .then(() => process.exit(0))
   .catch((error) => {

@@ -23,7 +23,7 @@ const publicRoutes = ["/verify", "/", "/login"];
 
 // Role-based route access (now based on blockchain roles)
 const roleRoutes = {
-  admin: ["/admin"], // Admin can only access admin dashboard
+  admin: ["/dashboard"], // Admin can access unified dashboard
   issuer: ["/dashboard"], // Issuer and holder use unified dashboard
   holder: ["/dashboard"],
 };
@@ -90,7 +90,7 @@ export function AuthProvider({ children }) {
 
         if (isAdmin) {
           primaryRole = "admin";
-          redirectTo = "/admin"; // Admin isolated to admin dashboard only
+          redirectTo = "/dashboard"; // Admin uses unified dashboard
           console.log("🔍 Admin role detected - setting primaryRole to admin");
         } else if (isIssuer) {
           primaryRole = "issuer";

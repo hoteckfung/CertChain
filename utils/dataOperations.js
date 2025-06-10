@@ -22,7 +22,7 @@ export async function getHolderCertificates() {
       title: "Advanced Blockchain Development",
       issuer: "Blockchain Academy",
       type: "Certificate of Completion",
-      status: "Verified",
+      status: "issued",
       issueDate: "2023-05-15",
       expiryDate: "2025-05-15",
       hash: "QmXS2LfM4sg39AbjxHKiWQB9PsZgUKaBmtEP764e7CDer5",
@@ -34,7 +34,7 @@ export async function getHolderCertificates() {
       title: "Smart Contract Security",
       issuer: "Web3 Security Institute",
       type: "Professional Certification",
-      status: "Issued",
+      status: "issued",
       issueDate: "2023-08-22",
       hash: "QmYA7p467t4BGgBL4NmyHtsXMoPrYH9b3kSG6dbgFYskJm",
       description:
@@ -45,18 +45,17 @@ export async function getHolderCertificates() {
       title: "Decentralized Application Architecture",
       issuer: "DApp University",
       type: "Course Certificate",
-      status: "Pending",
+      status: "revoked",
       issueDate: "2023-11-10",
       hash: "QmZZrTyPX2EZzCZrQAQoYyHEEz3Unsd8zcAHbKHCR4LMCJ",
-      description:
-        "This certificate is pending verification on the blockchain.",
+      description: "This certificate has been revoked by the issuer.",
     },
     {
       id: "cert-004",
       title: "Blockchain for Business",
       issuer: "Enterprise Blockchain Consortium",
       type: "Professional Certificate",
-      status: "Verified",
+      status: "issued",
       issueDate: "2023-03-05",
       expiryDate: "2026-03-05",
       hash: "QmPK1s3pNYLi9ERiq3BDxKa4XosgWwFRQUydHUtz4YgpqB",
@@ -109,7 +108,7 @@ export async function getIssuerCertificates() {
     ...cert,
     recipient: "0xD8f24D419153E5D03d614c5155f900f4B5C8A65a",
     recipientName: "John Doe",
-    status: cert.status === "Pending" ? "Draft" : cert.status,
+    status: cert.status, // Keep original status (already 'issued' or 'revoked')
   }));
 }
 

@@ -119,6 +119,22 @@ const VerifyPage = () => {
         throw new Error("Invalid IPFS hash format");
       }
 
+      // First, check blockchain verification
+      let blockchainVerification = null;
+      try {
+        const blockchainResponse = await fetch(
+          `/api/blockchain/verify-certificate?ipfsHash=${encodeURIComponent(
+            hash
+          )}`
+        );
+        if (blockchainResponse.ok) {
+          blockchainVerification = await blockchainResponse.json();
+        }
+      } catch (blockchainError) {
+        console.warn("Blockchain verification failed:", blockchainError);
+        // Continue with IPFS verification
+      }
+
       // Get the IPFS URL
       const ipfsUrl = getIPFSUrl(hash);
 
@@ -148,45 +164,87 @@ const VerifyPage = () => {
           };
         }
 
+        // Determine verification status
+        let verificationStatus = "valid";
+        let verificationMessage = "Certificate verified successfully!";
+
+        if (blockchainVerification) {
+          if (!blockchainVerification.exists) {
+            verificationStatus = "not_on_blockchain";
+            verificationMessage =
+              "Certificate file exists but is not recorded on blockchain";
+          } else if (!blockchainVerification.isValid) {
+            verificationStatus = "revoked";
+            verificationMessage = "Certificate has been revoked by the issuer";
+          } else {
+            verificationStatus = "valid";
+            verificationMessage =
+              "Certificate is valid and verified on blockchain";
+          }
+        }
+
         // Create a verification result
         setVerificationResult({
-          isValid: true,
+          isValid: verificationStatus === "valid",
+          verificationStatus,
+          blockchainVerified: blockchainVerification?.exists || false,
+          isRevoked: verificationStatus === "revoked",
           isJsonCert,
           certificate: isJsonCert
             ? {
                 id: certificateData.id || hash,
                 issuer:
+                  blockchainVerification?.certificate?.issuerName ||
                   certificateData.issuer ||
                   certificateData.issuerName ||
                   "Unknown Issuer",
                 issuedTo:
+                  blockchainVerification?.certificate?.recipientName ||
                   certificateData.recipient ||
                   certificateData.recipientName ||
                   "Unknown Recipient",
                 issuedDate:
+                  blockchainVerification?.certificate?.issueDate ||
                   certificateData.issuedOn ||
                   certificateData.issuanceDate ||
                   new Date().toISOString().split("T")[0],
                 course:
+                  blockchainVerification?.certificate?.certificateType ||
                   certificateData.title ||
                   certificateData.name ||
                   "Certificate",
                 description: certificateData.description || "",
                 additionalData: isJsonCert ? certificateData : null,
+                tokenId: blockchainVerification?.certificate?.tokenId || null,
               }
             : {
                 id: hash,
-                issuer: "Certificate Issuer",
-                issuedTo: "Certificate Holder",
-                issuedDate: new Date().toISOString().split("T")[0],
-                course: "Certificate",
+                issuer:
+                  blockchainVerification?.certificate?.issuerName ||
+                  "Certificate Issuer",
+                issuedTo:
+                  blockchainVerification?.certificate?.recipientName ||
+                  "Certificate Holder",
+                issuedDate:
+                  blockchainVerification?.certificate?.issueDate ||
+                  new Date().toISOString().split("T")[0],
+                course:
+                  blockchainVerification?.certificate?.certificateType ||
+                  "Certificate",
                 fileUrl: ipfsUrl,
+                tokenId: blockchainVerification?.certificate?.tokenId || null,
               },
           fileUrl: ipfsUrl,
           hash: hash,
         });
 
-        showSuccess("Certificate verified successfully!");
+        if (verificationStatus === "valid") {
+          showSuccess(verificationMessage);
+        } else if (verificationStatus === "revoked") {
+          showError(verificationMessage);
+        } else {
+          showWarning(verificationMessage);
+        }
       } catch (error) {
         console.error("Error fetching certificate:", error);
         throw new Error(
@@ -399,17 +457,117 @@ const VerifyPage = () => {
 
             {/* Verification Result */}
             {verificationResult && (
-              <Card className="border-green-500 mb-8">
-                <CardHeader className="bg-green-50">
+              <Card
+                className={`mb-8 ${
+                  verificationResult.isRevoked
+                    ? "border-red-500"
+                    : verificationResult.isValid
+                    ? "border-green-500"
+                    : "border-yellow-500"
+                }`}>
+                <CardHeader
+                  className={
+                    verificationResult.isRevoked
+                      ? "bg-red-50"
+                      : verificationResult.isValid
+                      ? "bg-green-50"
+                      : "bg-yellow-50"
+                  }>
                   <div className="flex items-center">
-                    <FileCheck className="h-6 w-6 text-green-500 mr-2" />
-                    <CardTitle>Certificate Verified</CardTitle>
+                    {verificationResult.isRevoked ? (
+                      <>
+                        <svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          className="h-6 w-6 text-red-500 mr-2"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          stroke="currentColor">
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 15.5c-.77.833.192 2.5 1.732 2.5z"
+                          />
+                        </svg>
+                        <CardTitle className="text-red-600">
+                          Certificate Revoked
+                        </CardTitle>
+                      </>
+                    ) : verificationResult.isValid ? (
+                      <>
+                        <FileCheck className="h-6 w-6 text-green-500 mr-2" />
+                        <CardTitle>Certificate Verified</CardTitle>
+                      </>
+                    ) : (
+                      <>
+                        <svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          className="h-6 w-6 text-yellow-500 mr-2"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          stroke="currentColor">
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                          />
+                        </svg>
+                        <CardTitle className="text-yellow-600">
+                          Certificate Found
+                        </CardTitle>
+                      </>
+                    )}
                   </div>
                   <CardDescription>
-                    This certificate has been verified as authentic
+                    {verificationResult.isRevoked
+                      ? "This certificate has been revoked by the issuer and is no longer valid"
+                      : verificationResult.isValid
+                      ? "This certificate has been verified as authentic"
+                      : "Certificate file exists but verification status is uncertain"}
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="pt-6">
+                  {/* Blockchain Status Banner */}
+                  {verificationResult.blockchainVerified && (
+                    <div
+                      className={`mb-4 p-3 rounded-lg ${
+                        verificationResult.isRevoked
+                          ? "bg-red-100 border border-red-200"
+                          : "bg-green-100 border border-green-200"
+                      }`}>
+                      <div className="flex items-center">
+                        <svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          className={`h-5 w-5 mr-2 ${
+                            verificationResult.isRevoked
+                              ? "text-red-600"
+                              : "text-green-600"
+                          }`}
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          stroke="currentColor">
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M9 12l2 2 4-4m5.6-1.6L21 8l-5.6-3.6a1.1 1.1 0 00-1.2 0L9 8l5.6 4a1.1 1.1 0 001.2 0z"
+                          />
+                        </svg>
+                        <span
+                          className={`text-sm font-medium ${
+                            verificationResult.isRevoked
+                              ? "text-red-600"
+                              : "text-green-600"
+                          }`}>
+                          {verificationResult.isRevoked
+                            ? "🚫 Revoked on Blockchain"
+                            : "🔗 Verified on Blockchain"}
+                        </span>
+                      </div>
+                    </div>
+                  )}
+
                   <div className="grid gap-4 md:grid-cols-2">
                     <div>
                       <h3 className="font-semibold text-gray-500 mb-1">
@@ -418,6 +576,17 @@ const VerifyPage = () => {
                       <p className="mb-4">
                         {verificationResult.certificate.id}
                       </p>
+
+                      {verificationResult.certificate.tokenId && (
+                        <>
+                          <h3 className="font-semibold text-gray-500 mb-1">
+                            Token ID
+                          </h3>
+                          <p className="mb-4">
+                            {verificationResult.certificate.tokenId}
+                          </p>
+                        </>
+                      )}
 
                       <h3 className="font-semibold text-gray-500 mb-1">
                         Issuer
@@ -446,6 +615,24 @@ const VerifyPage = () => {
                       </h3>
                       <p className="mb-4">
                         {verificationResult.certificate.course}
+                      </p>
+
+                      <h3 className="font-semibold text-gray-500 mb-1">
+                        Status
+                      </h3>
+                      <p
+                        className={`mb-4 font-medium ${
+                          verificationResult.isRevoked
+                            ? "text-red-600"
+                            : verificationResult.isValid
+                            ? "text-green-600"
+                            : "text-yellow-600"
+                        }`}>
+                        {verificationResult.isRevoked
+                          ? "🚫 REVOKED"
+                          : verificationResult.isValid
+                          ? "✅ VALID"
+                          : "⚠️ UNVERIFIED"}
                       </p>
 
                       <h3 className="font-semibold text-gray-500 mb-1">

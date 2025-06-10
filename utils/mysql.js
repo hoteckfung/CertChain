@@ -319,7 +319,36 @@ export async function getCertificatesByIssuer(issuerWallet) {
   return { data, error };
 }
 
-// Database initialization - simplified since tables are created manually
+export async function getCertificateById(certificateId) {
+  const { data, error } = await query(
+    "SELECT * FROM certificates WHERE id = ? LIMIT 1",
+    [certificateId]
+  );
+
+  if (error) return { data: null, error };
+  return { data: data[0] || null, error: null };
+}
+
+export async function getCertificateByTokenId(tokenId) {
+  const { data, error } = await query(
+    "SELECT * FROM certificates WHERE token_id = ? LIMIT 1",
+    [tokenId]
+  );
+
+  if (error) return { data: null, error };
+  return { data: data[0] || null, error: null };
+}
+
+export async function updateCertificateStatus(certificateId, status) {
+  const { data, error } = await query(
+    "UPDATE certificates SET status = ? WHERE id = ?",
+    [status, certificateId]
+  );
+
+  return { data, error };
+}
+
+// Database initialization
 export async function initializeDatabase() {
   try {
     // Just return success since tables are created manually in MySQL Workbench
@@ -341,104 +370,34 @@ export async function checkConnection() {
   }
 }
 
-// Profile operations
-export async function getProfileByWalletAddress(walletAddress) {
-  const { data, error } = await query(
-    "SELECT * FROM holder_profiles WHERE wallet_address = ? LIMIT 1",
-    [walletAddress.toLowerCase()]
-  );
+// Get database statistics for admin dashboard
+export async function getDatabaseStats() {
+  try {
+    const [usersResult] = await pool.query(
+      "SELECT COUNT(*) as count FROM users"
+    );
+    const [certificatesResult] = await pool.query(
+      "SELECT COUNT(*) as count FROM certificates"
+    );
+    const [activityResult] = await pool.query(
+      "SELECT COUNT(*) as count FROM activity_logs"
+    );
+    const [sessionsResult] = await pool.query(
+      "SELECT COUNT(*) as count FROM user_sessions WHERE is_active = TRUE"
+    );
 
-  if (error) return { data: null, error };
-  return { data: data[0] || null, error: null };
-}
-
-export async function createProfile(profileData) {
-  const {
-    wallet_address,
-    full_name,
-    phone_number,
-    organization = null,
-    privacy_settings = {},
-  } = profileData;
-
-  const privacyJson = JSON.stringify(privacy_settings);
-
-  const { data, error } = await query(
-    "INSERT INTO holder_profiles (wallet_address, full_name, phone_number, organization, privacy_settings, created_at) VALUES (?, ?, ?, ?, ?, NOW())",
-    [
-      wallet_address.toLowerCase(),
-      full_name,
-      phone_number,
-      organization,
-      privacyJson,
-    ]
-  );
-
-  if (error) return { data: null, error };
-
-  // Return the inserted profile
-  return getProfileByWalletAddress(wallet_address);
-}
-
-export async function updateProfile(walletAddress, profileData) {
-  const { full_name, phone_number, organization, privacy_settings } =
-    profileData;
-
-  const privacyJson = privacy_settings
-    ? JSON.stringify(privacy_settings)
-    : null;
-
-  // Build the update query dynamically based on provided fields
-  const updates = [];
-  const values = [];
-
-  if (full_name !== undefined) {
-    updates.push("full_name = ?");
-    values.push(full_name);
-  }
-  if (phone_number !== undefined) {
-    updates.push("phone_number = ?");
-    values.push(phone_number);
-  }
-  if (organization !== undefined) {
-    updates.push("organization = ?");
-    values.push(organization);
-  }
-  if (privacy_settings !== undefined) {
-    updates.push("privacy_settings = ?");
-    values.push(privacyJson);
-  }
-
-  if (updates.length === 0) {
-    return { data: null, error: new Error("No fields to update") };
-  }
-
-  updates.push("updated_at = NOW()");
-  values.push(walletAddress.toLowerCase());
-
-  const { data, error } = await query(
-    `UPDATE holder_profiles SET ${updates.join(", ")} WHERE wallet_address = ?`,
-    values
-  );
-
-  if (error) return { data: null, error };
-
-  // Return the updated profile
-  return getProfileByWalletAddress(walletAddress);
-}
-
-export async function upsertProfile(profileData) {
-  const { wallet_address } = profileData;
-
-  // Check if profile exists
-  const { data: existingProfile } = await getProfileByWalletAddress(
-    wallet_address
-  );
-
-  if (existingProfile) {
-    return updateProfile(wallet_address, profileData);
-  } else {
-    return createProfile(profileData);
+    return {
+      data: {
+        totalUsers: usersResult[0].count,
+        totalCertificates: certificatesResult[0].count,
+        totalActivities: activityResult[0].count,
+        activeSessions: sessionsResult[0].count,
+      },
+      error: null,
+    };
+  } catch (error) {
+    console.error("Database stats error:", error);
+    return { data: null, error };
   }
 }
 
@@ -462,10 +421,10 @@ export default {
   createCertificate,
   getCertificatesByHolder,
   getCertificatesByIssuer,
-  getProfileByWalletAddress,
-  createProfile,
-  updateProfile,
-  upsertProfile,
+  getCertificateById,
+  getCertificateByTokenId,
+  updateCertificateStatus,
+  getDatabaseStats,
   initializeDatabase,
   checkConnection,
 };

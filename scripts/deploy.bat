@@ -201,7 +201,7 @@ echo.
 echo    For detailed instructions, see README.md - 'Manual Smart Contract Deployment' section
 echo.
 echo Current Status:
-echo    ✅ Database and web app running
-echo    ⏳ Smart contract deployment pending (manual step required)
+echo    Database and web app running
+echo    Smart contract deployment pending (manual step required)
 echo.
 pause 

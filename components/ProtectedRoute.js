@@ -29,7 +29,7 @@ const ProtectedRoute = ({ children, allowedRoles }) => {
       // Redirect based on user's actual role
       switch (user.role) {
         case "admin":
-          router.push("/admin");
+          router.push("/dashboard");
           break;
         case "issuer":
         case "holder":

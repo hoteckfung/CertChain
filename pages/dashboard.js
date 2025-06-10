@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { useAuth } from "../contexts/AuthContext";
 import IssuerDashboard from "../components/dashboard/IssuerDashboard";
 import HolderDashboard from "../components/dashboard/HolderDashboard";
+import AdminDashboard from "../components/dashboard/AdminDashboard";
 import ProtectedRoute from "../components/ProtectedRoute";
 import { Loader2 } from "lucide-react";
 import Navbar from "../components/Navbar";
@@ -10,39 +11,13 @@ import Head from "next/head";
 
 const DashboardPage = () => {
   const { user, loading } = useAuth();
-  // Set initial tab based on role
-  const getInitialTab = () => {
-    if (!user) return "certificates";
-    const isIssuer = user?.roles?.isIssuer || user?.role === "issuer";
-    return isIssuer ? "create" : "certificates";
-  };
+  // Initialize with default tab - will be updated by useEffect once user loads
+  const [activeTab, setActiveTab] = useState("certificates");
 
-  const [activeTab, setActiveTab] = useState(getInitialTab());
-
-  // Fix role checking - check both the new structure and fallback to simple role
-  const isIssuer = user?.roles?.isIssuer || user?.role === "issuer";
-  const isAdmin = user?.roles?.isAdmin || user?.role === "admin";
-  const isHolder = user?.roles?.isHolder || user?.role === "holder";
-
-  // Debug logging to see user structure
-  React.useEffect(() => {
-    if (user) {
-      console.log("🔍 Dashboard User Object:", user);
-      console.log("🔍 User Role:", user?.role);
-      console.log("🔍 User Roles Object:", user?.roles);
-    }
-  }, [user]);
-
-  // Set default tab based on role when user changes
-  React.useEffect(() => {
-    if (user) {
-      if (isIssuer) {
-        setActiveTab("create");
-      } else if (isHolder) {
-        setActiveTab("certificates");
-      }
-    }
-  }, [user?.role, isIssuer, isHolder]);
+  // Simplified role checking - only use user.role string
+  const isIssuer = user?.role === "issuer";
+  const isAdmin = user?.role === "admin";
+  const isHolder = user?.role === "holder";
 
   // Show loading state - this comes AFTER all hooks are called
   if (loading || !user) {
@@ -53,27 +28,59 @@ const DashboardPage = () => {
     );
   }
 
-  // Define available tabs based on user role - removed Overview tab
+  // Define available tabs based on user role
   const availableTabs = [
+    // Admin tabs
+    { id: "users", label: "User Management", available: isAdmin },
+    { id: "activity", label: "Activity Log", available: isAdmin },
+    // Issuer/Holder tabs
     {
       id: "certificates",
       label: isIssuer ? "Issued Certificates" : "My Certificates",
-      available: true,
+      available: !isAdmin, // Hide for admin since they have different tabs
     },
-    { id: "create", label: "Create Certificate", available: isIssuer },
-    { id: "issue", label: "Issue Certificate", available: isIssuer },
+    {
+      id: "create",
+      label: "Create Certificates",
+      available: isIssuer && !isAdmin,
+    },
+    {
+      id: "issue",
+      label: "Issue Certificates",
+      available: isIssuer && !isAdmin,
+    },
   ].filter((tab) => tab.available);
+
+  // Set correct tab based on role when user loads
+  React.useEffect(() => {
+    if (user?.role) {
+      if (isAdmin) {
+        setActiveTab("users");
+      } else if (isIssuer) {
+        setActiveTab("create");
+      } else if (isHolder) {
+        setActiveTab("certificates");
+      }
+    }
+  }, [user?.role, isAdmin, isIssuer, isHolder]);
 
   return (
     <div className="flex flex-col min-h-screen">
       <Head>
         <title>
-          {isIssuer ? "Issuer Dashboard" : "Holder Dashboard"} - CertChain
+          {isAdmin
+            ? "Admin Dashboard"
+            : isIssuer
+            ? "Issuer Dashboard"
+            : "Holder Dashboard"}{" "}
+          - CertChain
         </title>
         <meta
           name="description"
           content={
-            isIssuer
+            isAdmin
+              ? "Manage users and monitor certificate activities"
+              : isIssuer
               ? "Issue and manage certificates on the blockchain"
               : "View and manage your certificates"
           }
@@ -86,10 +93,16 @@ const DashboardPage = () => {
         {/* Dashboard Header */}
         <div className="mb-8">
           <h1 className="text-4xl font-bold text-gray-900 mb-2">
-            {isIssuer ? "Issuer Dashboard" : "Your Certificates"}
+            {isAdmin
+              ? "Admin Dashboard"
+              : isIssuer
+              ? "Issuer Dashboard"
+              : "Holder Dashboard"}
           </h1>
           <p className="text-xl text-gray-600">
-            {isIssuer
+            {isAdmin
+              ? "Manage users and monitor certificate activities"
+              : isIssuer
               ? "Create, issue, and manage blockchain certificates"
               : "View, download, and share your certificates"}
           </p>
@@ -107,17 +120,6 @@ const DashboardPage = () => {
                 {user?.walletAddress?.slice(-4)}
               </span>
             </div>
-          </div>
-
-          {/* Debug Info - Remove this after testing */}
-          <div className="mt-4 p-4 bg-gray-100 rounded-lg">
-            <p className="text-sm">
-              <strong>Debug Info:</strong>
-            </p>
-            <p className="text-sm">isIssuer: {isIssuer ? "true" : "false"}</p>
-            <p className="text-sm">isAdmin: {isAdmin ? "true" : "false"}</p>
-            <p className="text-sm">isHolder: {isHolder ? "true" : "false"}</p>
-            <p className="text-sm">user.role: {user?.role}</p>
           </div>
         </div>
 
@@ -140,7 +142,9 @@ const DashboardPage = () => {
         </div>
 
         {/* Role-specific Dashboard Content */}
-        {isIssuer ? (
+        {isAdmin ? (
+          <AdminDashboard activeTab={activeTab} />
+        ) : isIssuer ? (
           <IssuerDashboard activeTab={activeTab} />
         ) : (
           <HolderDashboard activeTab={activeTab} />
@@ -153,7 +157,7 @@ const DashboardPage = () => {
 };
 
 const ProtectedDashboard = () => (
-  <ProtectedRoute allowedRoles={["issuer", "holder"]}>
+  <ProtectedRoute allowedRoles={["admin", "issuer", "holder"]}>
     <DashboardPage />
   </ProtectedRoute>
 );

@@ -36,7 +36,7 @@ export default async function handler(req, res) {
 
     // Add role-specific redirects
     const roleRoutes = {
-      admin: "/admin",
+      admin: "/dashboard",
       issuer: "/dashboard",
       holder: "/dashboard",
     };
