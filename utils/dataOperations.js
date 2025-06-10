@@ -28,11 +28,6 @@ export async function getHolderCertificates() {
       hash: "QmXS2LfM4sg39AbjxHKiWQB9PsZgUKaBmtEP764e7CDer5",
       description:
         "This certificate verifies completion of the Advanced Blockchain Development course.",
-      metadata: {
-        courseHours: "120 hours",
-        grade: "A",
-        instructor: "Dr. Satoshi Nakamoto",
-      },
     },
     {
       id: "cert-002",
@@ -67,11 +62,6 @@ export async function getHolderCertificates() {
       hash: "QmPK1s3pNYLi9ERiq3BDxKa4XosgWwFRQUydHUtz4YgpqB",
       description:
         "Professional certification for implementing blockchain solutions in enterprise environments.",
-      metadata: {
-        level: "Advanced",
-        credentialID: "EBC-22-78945",
-        skills: "Hyperledger, Enterprise Ethereum, Tokenization",
-      },
     },
   ];
 
@@ -89,10 +79,6 @@ export async function getHolderCertificates() {
     issueDate: cert.issueDate,
     hash: cert.hash,
     description: cert.details || `Certificate for ${cert.title}`,
-    metadata: {
-      holderAddress: cert.holder,
-      holderName: cert.name,
-    },
   }));
 
   // Return combined certificates (issued ones first, then mock ones)

@@ -1,4 +1,4 @@
-import { connectToDatabase } from "../../../lib/db";
+import mysql from "../../../utils/mysql";
 
 export default async function handler(req, res) {
   if (req.method !== "POST") {
@@ -15,7 +15,6 @@ export default async function handler(req, res) {
       blockNumber,
       tokenId,
       ipfsHash,
-      metadata = {},
     } = req.body;
 
     // Validate required fields
@@ -25,40 +24,26 @@ export default async function handler(req, res) {
       });
     }
 
-    const connection = await connectToDatabase();
+    // Use the logActivity function from mysql utils
+    const { data, error } = await mysql.logActivity({
+      action: type,
+      wallet_address: walletAddress,
+      target_wallet_address: targetAddress,
+      details: details,
+      transaction_hash: transactionHash,
+      block_number: blockNumber,
+      token_id: tokenId,
+      ipfs_hash: ipfsHash,
+      category: "user_action",
+    });
 
-    // Create activity log entry
-    const [result] = await connection.execute(
-      `INSERT INTO activity_logs (
-        type, 
-        wallet_address, 
-        target_address, 
-        details, 
-        transaction_hash, 
-        block_number, 
-        token_id, 
-        ipfs_hash, 
-        metadata, 
-        created_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())`,
-      [
-        type,
-        walletAddress,
-        targetAddress || null,
-        details || null,
-        transactionHash || null,
-        blockNumber || null,
-        tokenId || null,
-        ipfsHash || null,
-        JSON.stringify(metadata),
-      ]
-    );
-
-    await connection.end();
+    if (error) {
+      throw new Error(`Failed to log activity: ${error.message}`);
+    }
 
     res.status(200).json({
       success: true,
-      activityId: result.insertId,
+      activityId: data?.insertId,
       message: "Activity logged successfully",
     });
   } catch (error) {

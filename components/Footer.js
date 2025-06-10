@@ -30,30 +30,28 @@ const Footer = () => {
           <FooterColumn
             title="Platform"
             links={[
-              { label: "Features", href: "#" },
-              { label: "Verify Certificate", href: "#" },
-              { label: "Dashboard", href: "#" },
-              { label: "API Documentation", href: "#" },
+              { label: "Verify Certificate", href: "/verify" },
+              { label: "Dashboard", href: "/dashboard" },
             ]}
           />
 
           <FooterColumn
             title="User Types"
             links={[
-              { label: "For Issuers", href: "#" },
-              { label: "For Certificate Holders", href: "#" },
-              { label: "For Verifiers", href: "#" },
-              { label: "For Admins", href: "#" },
+              { label: "System Admin", href: "/admin" },
+              { label: "Certificate Issuer", href: "/dashboard" },
+              { label: "Certificate Holder", href: "/dashboard" },
+              { label: "Certificate Verifier", href: "/verify" },
             ]}
           />
 
           <FooterColumn
             title="Resources"
             links={[
-              { label: "Documentation", href: "#" },
+              { label: "About Us", href: "#" },
+              { label: "Contact Us", href: "#" },
               { label: "Help Center", href: "#" },
-              { label: "Blockchain Guides", href: "#" },
-              { label: "System Status", href: "#" },
+              { label: "FAQ", href: "#" },
             ]}
           />
 

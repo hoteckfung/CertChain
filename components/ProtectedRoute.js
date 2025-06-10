@@ -1,104 +1,48 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/router";
-import {
-  getUserRole,
-  getWalletAddress,
-  clearAuth,
-  ROLES,
-} from "../lib/auth-client";
+import { useAuth } from "../contexts/AuthContext";
 import { Card, CardContent } from "./ui/card";
 import { Loader2, ShieldAlert } from "lucide-react";
 import { Button } from "./ui/button";
 
 const ProtectedRoute = ({ children, allowedRoles }) => {
   const router = useRouter();
+  const { user, loading, error } = useAuth();
   const [authorized, setAuthorized] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState(null);
 
   useEffect(() => {
-    // Check authorization on component mount and when router or allowedRoles change
-    const verifyUser = async () => {
-      try {
-        setIsLoading(true);
-        setError(null);
+    // Don't check authorization while loading
+    if (loading) return;
 
-        // Get wallet address and role from local storage
-        const walletAddress = getWalletAddress();
-        let userRole = getUserRole();
+    // If no user after loading is complete, redirect to login
+    if (!user) {
+      router.push("/login");
+      return;
+    }
 
-        // If no wallet address or role, user is not authenticated
-        if (!walletAddress || !userRole) {
-          setAuthorized(false);
-          router.push("/login");
-          return;
-        }
-
-        // Special case: hardcoded admin address
-        const adminAddress =
-          "0x241dBc6d5f283964536A94e33E2323B7580CE45A".toLowerCase();
-        if (walletAddress && walletAddress.toLowerCase() === adminAddress) {
-          console.log("Admin address detected in ProtectedRoute");
-          if (allowedRoles.includes("admin")) {
-            setAuthorized(true);
-            setIsLoading(false);
-            return;
-          }
-        }
-
-        // Note: In a clean architecture, role verification should be handled
-        // by the AuthContext or via API calls, not direct database access from components
-        // For now, we'll rely on localStorage and let the AuthContext handle database sync
-
-        // Check if user has one of the allowed roles
-        if (allowedRoles.includes(userRole)) {
-          setAuthorized(true);
-        } else {
-          setAuthorized(false);
-          setError(
-            `Access denied. You need ${allowedRoles.join(" or ")} role.`
-          );
-
-          // Redirect based on role
-          switch (userRole) {
-            case ROLES.ADMIN:
-              router.push("/admin");
-              break;
-            case ROLES.ISSUER:
-              router.push("/issuer");
-              break;
-            case ROLES.HOLDER:
-              router.push("/holder");
-              break;
-            default:
-              router.push("/login");
-          }
-        }
-      } catch (error) {
-        console.error("Authorization error:", error);
-        setError("Error verifying access. Please try again.");
-        setAuthorized(false);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    verifyUser();
-
-    // Listen for route changes and reverify on each change
-    const handleRouteChange = () => {
+    // Check if user has one of the allowed roles
+    if (allowedRoles.includes(user.role)) {
+      setAuthorized(true);
+    } else {
       setAuthorized(false);
-      setIsLoading(true);
-    };
 
-    router.events.on("routeChangeStart", handleRouteChange);
+      // Redirect based on user's actual role
+      switch (user.role) {
+        case "admin":
+          router.push("/admin");
+          break;
+        case "issuer":
+        case "holder":
+          router.push("/dashboard");
+          break;
+        default:
+          router.push("/login");
+      }
+    }
+  }, [user, loading, router, allowedRoles]);
 
-    return () => {
-      router.events.off("routeChangeStart", handleRouteChange);
-    };
-  }, [router, allowedRoles]);
-
-  if (isLoading) {
+  // Show loading while AuthContext is loading or while we're checking authorization
+  if (loading || (!user && !error)) {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center p-4">
         <Card className="w-full max-w-md">
@@ -114,7 +58,8 @@ const ProtectedRoute = ({ children, allowedRoles }) => {
     );
   }
 
-  if (!authorized) {
+  // Show error or access denied if user is not authorized
+  if (!authorized || error) {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center p-4">
         <Card className="w-full max-w-md">
@@ -126,7 +71,8 @@ const ProtectedRoute = ({ children, allowedRoles }) => {
               Access Denied
             </h2>
             <p className="mt-4 text-center text-gray-700">
-              {error || "You do not have permission to view this page."}
+              {error ||
+                `Access denied. You need ${allowedRoles.join(" or ")} role.`}
             </p>
 
             <div className="mt-6 flex flex-col gap-2">

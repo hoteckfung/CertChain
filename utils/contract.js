@@ -14,11 +14,8 @@ const CERTIFICATE_NFT_ABI = [
   // Role management
   "function grantIssuerRole(address account)",
   "function revokeIssuerRole(address account)",
-  "function grantVerifierRole(address account)",
-  "function revokeVerifierRole(address account)",
   "function isIssuer(address account) view returns (bool)",
   "function isAdmin(address account) view returns (bool)",
-  "function isVerifier(address account) view returns (bool)",
 
   // ERC721 functions
   "function ownerOf(uint256 tokenId) view returns (address)",
@@ -254,48 +251,6 @@ export async function revokeCertificate(tokenId) {
 }
 
 /**
- * Check if user has issuer role
- */
-export async function checkIssuerRole(address) {
-  try {
-    const contract = getContractRead();
-    const isIssuer = await contract.isIssuer(address);
-    return { success: true, isIssuer };
-  } catch (error) {
-    console.error("Error checking issuer role:", error);
-    return { success: false, error: error.message, isIssuer: false };
-  }
-}
-
-/**
- * Check if user has admin role
- */
-export async function checkAdminRole(address) {
-  try {
-    const contract = getContractRead();
-    const isAdmin = await contract.isAdmin(address);
-    return { success: true, isAdmin };
-  } catch (error) {
-    console.error("Error checking admin role:", error);
-    return { success: false, error: error.message, isAdmin: false };
-  }
-}
-
-/**
- * Check if user has verifier role
- */
-export async function checkVerifierRole(address) {
-  try {
-    const contract = getContractRead();
-    const isVerifier = await contract.isVerifier(address);
-    return { success: true, isVerifier };
-  } catch (error) {
-    console.error("Error checking verifier role:", error);
-    return { success: false, error: error.message, isVerifier: false };
-  }
-}
-
-/**
  * Get total number of certificates
  */
 export async function getTotalCertificates() {
@@ -314,6 +269,15 @@ export async function getTotalCertificates() {
  */
 export async function grantIssuerRole(address) {
   try {
+    // Validate address format
+    if (!address || typeof address !== "string") {
+      throw new Error("Invalid address: address must be a string");
+    }
+
+    if (!ethers.isAddress(address)) {
+      throw new Error("Invalid address: not a valid Ethereum address format");
+    }
+
     const contract = await getContractWrite();
     const tx = await contract.grantIssuerRole(address);
 
@@ -331,6 +295,62 @@ export async function grantIssuerRole(address) {
     return {
       success: false,
       error: error.message,
+    };
+  }
+}
+
+/**
+ * Revoke issuer role from an address (admin only)
+ */
+export async function revokeIssuerRole(address) {
+  try {
+    // Validate address format
+    if (!address || typeof address !== "string") {
+      throw new Error("Invalid address: address must be a string");
+    }
+
+    if (!ethers.isAddress(address)) {
+      throw new Error("Invalid address: not a valid Ethereum address format");
+    }
+
+    const contract = await getContractWrite();
+    const tx = await contract.revokeIssuerRole(address);
+
+    console.log("Revoke issuer role transaction submitted:", tx.hash);
+    const receipt = await tx.wait();
+    console.log("Revoke issuer role confirmed:", receipt);
+
+    return {
+      success: true,
+      transactionHash: receipt.transactionHash,
+      blockNumber: receipt.blockNumber,
+    };
+  } catch (error) {
+    console.error("Error revoking issuer role:", error);
+    return {
+      success: false,
+      error: error.message,
+    };
+  }
+}
+
+/**
+ * Get users with their blockchain roles
+ */
+export async function getUsersWithBlockchainRoles() {
+  try {
+    // This will need to be implemented differently since we can't easily enumerate all addresses
+    // For now, return empty array and let the component handle known addresses
+    return {
+      success: true,
+      users: [],
+    };
+  } catch (error) {
+    console.error("Error getting users with blockchain roles:", error);
+    return {
+      success: false,
+      error: error.message,
+      users: [],
     };
   }
 }
@@ -419,5 +439,35 @@ export async function connectWallet() {
     };
   }
 }
+
+/**
+ * @returns {Promise<object>} Object with user roles (isAdmin, isIssuer)
+ */
+export const checkUserRoles = async (address) => {
+  try {
+    // Validate address format to prevent ENS resolution attempts
+    if (!address || typeof address !== "string") {
+      throw new Error("Invalid address: address must be a string");
+    }
+
+    // Check if it's a valid Ethereum address format
+    if (!ethers.isAddress(address)) {
+      throw new Error("Invalid address: not a valid Ethereum address format");
+    }
+
+    const contract = getContractRead();
+    const isAdmin = await contract.isAdmin(address);
+    const isIssuer = await contract.isIssuer(address);
+    return { success: true, isAdmin, isIssuer };
+  } catch (error) {
+    console.error("Error checking roles:", error);
+    return {
+      success: false,
+      error: error.message,
+      isAdmin: false,
+      isIssuer: false,
+    };
+  }
+};
 
 export { CONTRACT_CONFIG, CERTIFICATE_NFT_ABI };

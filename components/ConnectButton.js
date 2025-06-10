@@ -78,18 +78,6 @@ const ConnectButton = ({ children, size, className, ...props }) => {
     setError("");
 
     try {
-      // Check if environment variables are set
-      if (
-        !process.env.MYSQL_HOST ||
-        !process.env.MYSQL_USER ||
-        !process.env.MYSQL_PASSWORD ||
-        !process.env.MYSQL_DATABASE
-      ) {
-        console.error("MySQL credentials missing");
-        setError("Database configuration missing. Check console for details.");
-        return;
-      }
-
       const user = await connectWallet();
       if (user) {
         redirectBasedOnRole(router);

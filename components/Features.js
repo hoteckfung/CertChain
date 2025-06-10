@@ -131,7 +131,7 @@ const Features = () => {
               </svg>
             }
             title="Role-Based Access"
-            description="Customized portals for Admins, Issuers, and Holders"
+            description="Customized portals for Admin, Issuer, Holder, and Verifier"
           />
 
           <FeatureCard3D

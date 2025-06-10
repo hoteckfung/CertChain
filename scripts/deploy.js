@@ -27,14 +27,13 @@ async function main() {
 
   // Verify roles are set up correctly
   const deployerAddress = await deployer.getAddress();
+  console.log("Contract deployed by:", deployerAddress);
+
   const hasAdminRole = await certificateNFT.isAdmin(deployerAddress);
   const hasIssuerRole = await certificateNFT.isIssuer(deployerAddress);
-  const hasVerifierRole = await certificateNFT.isVerifier(deployerAddress);
 
-  console.log("\n📋 Role Configuration:");
-  console.log("Admin role:", hasAdminRole);
-  console.log("Issuer role:", hasIssuerRole);
-  console.log("Verifier role:", hasVerifierRole);
+  console.log("Deployer has admin role:", hasAdminRole);
+  console.log("Deployer has issuer role:", hasIssuerRole);
 
   // Save deployment info
   const deploymentInfo = {
@@ -57,6 +56,9 @@ async function main() {
       } ${await certificateNFT.getAddress()}`
     );
   }
+
+  // Auto-update environment files
+  updateEnvFile(await certificateNFT.getAddress());
 
   return certificateNFT;
 }

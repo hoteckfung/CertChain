@@ -42,8 +42,7 @@ export async function middleware(request) {
     // Enhanced role-based access control with hierarchy
     const accessMap = {
       "/admin": ["admin"],
-      "/issuer": ["issuer", "admin"],
-      "/holder": ["holder", "issuer", "admin"],
+      "/dashboard": ["holder", "issuer", "admin"],
     };
 
     // Check if user can access this route using role hierarchy
@@ -59,13 +58,7 @@ export async function middleware(request) {
 
       if (!hasAccess) {
         // Redirect to user's appropriate dashboard
-        const userDashboard = {
-          admin: "/admin",
-          issuer: "/issuer",
-          holder: "/holder",
-        };
-
-        const redirectUrl = userDashboard[role] || "/login";
+        const redirectUrl = role === "admin" ? "/admin" : "/dashboard";
 
         // Add headers for better debugging
         const response = NextResponse.redirect(

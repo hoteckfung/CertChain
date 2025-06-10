@@ -25,15 +25,19 @@ import {
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Alert, AlertDescription } from "./ui/alert";
-import { ROLES } from "../lib/auth-client";
 import { useAuth } from "../contexts/AuthContext";
+import {
+  checkUserRoles,
+  grantIssuerRole,
+  revokeIssuerRole,
+} from "../utils/contract";
 import {
   Loader2,
   CheckCircle2,
   AlertCircle,
   Search,
   RefreshCw,
-  Trash2,
+  ExternalLink,
 } from "lucide-react";
 
 const UserRoleManager = () => {
@@ -44,183 +48,140 @@ const UserRoleManager = () => {
   const [success, setSuccess] = useState("");
   const [roleFilter, setRoleFilter] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
-  const [updatingUserId, setUpdatingUserId] = useState(null);
+  const [updatingAddress, setUpdatingAddress] = useState(null);
   const [lastUpdated, setLastUpdated] = useState(null);
-  const [deletingUserId, setDeletingUserId] = useState(null);
 
-  // Hardcoded admin address for special handling
-  const adminAddress =
-    "0x241dBc6d5f283964536A94e33E2323B7580CE45A".toLowerCase();
+  // Hardcoded addresses for demonstration - in production you might get these from database or other sources
+  const knownAddresses = [
+    {
+      address: "0x241dBc6d5f283964536A94e33E2323B7580CE45A",
+    },
+    {
+      address: "0x6ae5ffe48c1395260cf096134e5e32725c24080a",
+    },
+    {
+      address: "0x01178ee99F7E50957Ab591b0C7ca307E593254C9",
+    },
+  ];
 
-  // Fetch all users on component mount
+  // Load users and their blockchain roles
   useEffect(() => {
-    loadUsers();
-  }, [roleFilter]);
+    loadUsersWithRoles();
+  }, []);
 
-  const loadUsers = async () => {
+  const loadUsersWithRoles = async () => {
     setLoading(true);
     setError("");
+
     try {
-      const response = await fetch("/api/admin/users", {
-        credentials: "include",
-      });
+      const usersWithRoles = [];
 
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      for (const knownUser of knownAddresses) {
+        try {
+          const { success, isAdmin, isIssuer } = await checkUserRoles(
+            knownUser.address
+          );
+
+          if (success) {
+            // Determine primary role
+            let role = "holder";
+            if (isAdmin) role = "admin";
+            else if (isIssuer) role = "issuer";
+
+            usersWithRoles.push({
+              id: knownUser.address,
+              wallet_address: knownUser.address,
+              role: role,
+              isAdmin,
+              isIssuer,
+              last_active: new Date().toISOString(),
+            });
+          }
+        } catch (err) {
+          console.error(`Error checking roles for ${knownUser.address}:`, err);
+        }
       }
 
-      const data = await response.json();
-      let usersData = data.users || [];
-
-      // Filter by role if specified
-      if (roleFilter) {
-        usersData = usersData.filter((user) => user.role === roleFilter);
-      }
-
-      setUsers(usersData);
+      setUsers(usersWithRoles);
       setLastUpdated(new Date());
     } catch (err) {
-      console.error("Failed to load users:", err);
-
-      // If database error, show mock data for the admin
-      const mockUsers = [
-        {
-          id: "1",
-          wallet_address: adminAddress,
-          username: "Admin User",
-          role: ROLES.ADMIN,
-          last_active: new Date().toISOString(),
-          created_at: new Date().toISOString(),
-        },
-      ];
-      setUsers(mockUsers);
-      setError("Database connection issue. Showing mock data for now.");
+      console.error("Failed to load users with roles:", err);
+      setError("Failed to load blockchain roles: " + err.message);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleRoleChange = async (userId, newRole) => {
+  const handleBlockchainRoleChange = async (walletAddress, newRole) => {
     setSuccess("");
     setError("");
-    setUpdatingUserId(userId);
+    setUpdatingAddress(walletAddress);
 
     try {
-      const response = await fetch("/api/admin/users", {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        credentials: "include",
-        body: JSON.stringify({ userId, newRole }),
-      });
+      let result;
 
-      if (!response.ok) {
-        const errorData = await response.json();
+      // Get current roles
+      const currentRoles = await checkUserRoles(walletAddress);
+      if (!currentRoles.success) {
+        throw new Error("Failed to check current roles");
+      }
+
+      // Determine what blockchain operation to perform
+      if (newRole === "issuer") {
+        if (!currentRoles.isIssuer) {
+          result = await grantIssuerRole(walletAddress);
+        } else {
+          throw new Error("User already has issuer role");
+        }
+      } else if (newRole === "holder") {
+        if (currentRoles.isIssuer) {
+          result = await revokeIssuerRole(walletAddress);
+        } else {
+          throw new Error("User is already a holder");
+        }
+      } else if (newRole === "admin") {
         throw new Error(
-          errorData.error || `HTTP ${response.status}: ${response.statusText}`
+          "Admin roles cannot be granted through this interface. Only the contract deployer can be admin."
         );
       }
 
-      // Update the local state
-      setUsers(
-        users.map((user) =>
-          user.id === userId ? { ...user, role: newRole } : user
-        )
+      if (!result.success) {
+        throw new Error(result.error || "Blockchain transaction failed");
+      }
+
+      setSuccess(
+        `Role updated successfully! Transaction: ${result.transactionHash}`
       );
 
-      setSuccess(`User role updated successfully to ${newRole}`);
+      // Reload users after successful role change
+      await loadUsersWithRoles();
 
-      // Refresh the current user's role if they were the one updated
+      // Refresh current user's role if they were the one updated
       if (refreshUserRole) {
         await refreshUserRole();
       }
 
-      // Clear success message after 3 seconds
+      // Clear success message after 5 seconds
       setTimeout(() => {
         setSuccess("");
-      }, 3000);
+      }, 5000);
     } catch (err) {
-      console.error("Failed to update role:", err);
+      console.error("Failed to update blockchain role:", err);
       setError("Failed to update role: " + (err.message || "Unknown error"));
     } finally {
-      setUpdatingUserId(null);
+      setUpdatingAddress(null);
     }
   };
 
-  const handleDeleteUser = async (userId, userWalletAddress) => {
-    // Show confirmation
-    if (
-      !confirm(
-        `Are you sure you want to delete user ${userWalletAddress}? This action cannot be undone.`
-      )
-    ) {
-      return;
-    }
-
-    setSuccess("");
-    setError("");
-    setDeletingUserId(userId);
-
-    try {
-      const response = await fetch("/api/admin/users", {
-        method: "DELETE",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        credentials: "include",
-        body: JSON.stringify({ userId }),
-      });
-
-      if (!response.ok) {
-        // Try to parse as JSON, but handle case where response is HTML
-        const contentType = response.headers.get("content-type");
-        let errorMessage = `HTTP ${response.status}: ${response.statusText}`;
-
-        if (contentType && contentType.includes("application/json")) {
-          try {
-            const errorData = await response.json();
-            errorMessage = errorData.error || errorMessage;
-          } catch (jsonError) {
-            console.error("Error parsing JSON:", jsonError);
-          }
-        } else {
-          // Response is likely HTML (error page)
-          const responseText = await response.text();
-          console.error("Non-JSON response:", responseText);
-          errorMessage =
-            "Server returned an error page instead of JSON. Check browser console for details.";
-        }
-
-        throw new Error(errorMessage);
-      }
-
-      // Remove user from local state
-      setUsers(users.filter((user) => user.id !== userId));
-
-      setSuccess("User deleted successfully");
-
-      // Clear success message after 3 seconds
-      setTimeout(() => {
-        setSuccess("");
-      }, 3000);
-    } catch (err) {
-      console.error("Failed to delete user:", err);
-      setError("Failed to delete user: " + (err.message || "Unknown error"));
-    } finally {
-      setDeletingUserId(null);
-    }
-  };
-
-  // Filter users based on search term
+  // Filter users based on search term and role filter
   const filteredUsers = users.filter((user) => {
-    if (!searchTerm) return true;
+    const matchesSearch =
+      !searchTerm ||
+      user.wallet_address.toLowerCase().includes(searchTerm.toLowerCase());
 
-    const searchLower = searchTerm.toLowerCase();
-    return (
-      user.wallet_address.toLowerCase().includes(searchLower) ||
-      (user.username && user.username.toLowerCase().includes(searchLower))
-    );
+    const matchesRole = !roleFilter || user.role === roleFilter;
+
+    return matchesSearch && matchesRole;
   });
 
   return (
@@ -254,7 +215,7 @@ const UserRoleManager = () => {
             <div className="relative">
               <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-gray-500" />
               <Input
-                placeholder="Search by wallet address or username"
+                placeholder="Search by wallet address"
                 className="pl-9"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
@@ -265,21 +226,22 @@ const UserRoleManager = () => {
           <div className="w-full sm:w-48">
             <Select value={roleFilter} onValueChange={setRoleFilter}>
               <SelectTrigger>
-                <SelectValue placeholder="Filter by role" />
+                <SelectValue placeholder="All Roles" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="">All Roles</SelectItem>
-                <SelectItem value={ROLES.ADMIN}>Admin</SelectItem>
-                <SelectItem value={ROLES.ISSUER}>Issuer</SelectItem>
-                <SelectItem value={ROLES.HOLDER}>Holder</SelectItem>
+                <SelectItem value="admin">Admin</SelectItem>
+                <SelectItem value="issuer">Issuer</SelectItem>
+                <SelectItem value="holder">Holder</SelectItem>
               </SelectContent>
             </Select>
           </div>
 
           <Button
-            onClick={loadUsers}
+            onClick={loadUsersWithRoles}
             variant="outline"
             className="w-full sm:w-auto">
+            <RefreshCw className="h-4 w-4 mr-2" />
             Refresh
           </Button>
         </div>
@@ -296,7 +258,6 @@ const UserRoleManager = () => {
               <TableHeader>
                 <TableRow>
                   <TableHead>Wallet Address</TableHead>
-                  <TableHead>Username</TableHead>
                   <TableHead>Current Role</TableHead>
                   <TableHead>Change Role</TableHead>
                   <TableHead>Actions</TableHead>
@@ -311,14 +272,13 @@ const UserRoleManager = () => {
                         user.wallet_address.length - 4
                       )}
                     </TableCell>
-                    <TableCell>{user.username || "—"}</TableCell>
                     <TableCell>
                       <span
                         className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
                         ${
-                          user.role === ROLES.ADMIN
+                          user.role === "admin"
                             ? "bg-purple-100 text-purple-800"
-                            : user.role === ROLES.ISSUER
+                            : user.role === "issuer"
                             ? "bg-blue-100 text-blue-800"
                             : "bg-green-100 text-green-800"
                         }`}>
@@ -328,50 +288,45 @@ const UserRoleManager = () => {
                     <TableCell>
                       <Select
                         disabled={
-                          updatingUserId === user.id ||
-                          user.wallet_address.toLowerCase() === adminAddress
+                          updatingAddress === user.wallet_address ||
+                          user.role === "admin"
                         }
                         onValueChange={(value) =>
-                          handleRoleChange(user.id, value)
+                          handleBlockchainRoleChange(user.wallet_address, value)
                         }>
                         <SelectTrigger className="w-[130px]">
                           <SelectValue placeholder="Change role" />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value={ROLES.ADMIN}>
-                            Make Admin
-                          </SelectItem>
-                          <SelectItem value={ROLES.ISSUER}>
-                            Make Issuer
-                          </SelectItem>
-                          <SelectItem value={ROLES.HOLDER}>
-                            Make Holder
-                          </SelectItem>
+                          <SelectItem value="issuer">Make Issuer</SelectItem>
+                          <SelectItem value="holder">Make Holder</SelectItem>
                         </SelectContent>
                       </Select>
-                      {user.wallet_address.toLowerCase() === adminAddress && (
+                      {user.role === "admin" && (
                         <p className="text-xs text-gray-500 mt-1">
                           Cannot change primary admin
                         </p>
                       )}
+                      {updatingAddress === user.wallet_address && (
+                        <p className="text-xs text-blue-600 mt-1 flex items-center">
+                          <Loader2 className="h-3 w-3 animate-spin mr-1" />
+                          Updating on blockchain...
+                        </p>
+                      )}
                     </TableCell>
                     <TableCell>
-                      {user.wallet_address.toLowerCase() !== adminAddress && (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          disabled={deletingUserId === user.id}
-                          onClick={() =>
-                            handleDeleteUser(user.id, user.wallet_address)
-                          }
-                          className="text-red-600 hover:text-red-800 hover:bg-red-50">
-                          {deletingUserId === user.id ? (
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                          ) : (
-                            <Trash2 className="h-4 w-4" />
-                          )}
-                        </Button>
-                      )}
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() =>
+                          window.open(
+                            `https://etherscan.io/address/${user.wallet_address}`,
+                            "_blank"
+                          )
+                        }
+                        className="text-blue-600 hover:text-blue-800">
+                        <ExternalLink className="h-4 w-4" />
+                      </Button>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -382,7 +337,17 @@ const UserRoleManager = () => {
       </CardContent>
 
       <CardFooter className="flex justify-between">
-        <div className="text-sm text-gray-500">Total users: {users.length}</div>
+        <div className="text-sm text-gray-500">
+          Total users: {users.length}
+          {lastUpdated && (
+            <span className="ml-4">
+              Last updated: {lastUpdated.toLocaleTimeString()}
+            </span>
+          )}
+        </div>
+        <div className="text-xs text-gray-400">
+          Role changes require blockchain transactions
+        </div>
       </CardFooter>
     </Card>
   );

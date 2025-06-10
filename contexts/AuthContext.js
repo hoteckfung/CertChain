@@ -13,11 +13,7 @@ import {
   handleAccountChange,
   handleChainChange,
 } from "../utils/wallet";
-import {
-  checkIssuerRole,
-  checkAdminRole,
-  checkVerifierRole,
-} from "../utils/contract";
+import { checkUserRoles } from "../utils/contract";
 
 // Enhanced AuthContext with blockchain-first authentication
 const AuthContext = createContext();
@@ -27,10 +23,9 @@ const publicRoutes = ["/verify", "/", "/login"];
 
 // Role-based route access (now based on blockchain roles)
 const roleRoutes = {
-  admin: ["/admin", "/issuer", "/holder"],
-  issuer: ["/issuer", "/holder"],
-  verifier: ["/verify", "/holder"],
-  holder: ["/holder"],
+  admin: ["/admin"], // Admin can only access admin dashboard
+  issuer: ["/dashboard"], // Issuer and holder use unified dashboard
+  holder: ["/dashboard"],
 };
 
 export function AuthProvider({ children }) {
@@ -39,6 +34,7 @@ export function AuthProvider({ children }) {
   const [error, setError] = useState(null);
   const [roleVerificationCache, setRoleVerificationCache] = useState(null);
   const [lastVerification, setLastVerification] = useState(null);
+  const [manualLogout, setManualLogout] = useState(false);
   const router = useRouter();
 
   // Use refs to track event listeners and intervals
@@ -68,48 +64,49 @@ export function AuthProvider({ children }) {
       try {
         console.log("🔍 Verifying blockchain roles for:", walletAddress);
 
-        // Check all roles on blockchain
-        const [adminResult, issuerResult, verifierResult] =
-          await Promise.allSettled([
-            checkAdminRole(walletAddress),
-            checkIssuerRole(walletAddress),
-            checkVerifierRole(walletAddress),
-          ]);
+        // Check roles using a single utility function
+        const { success, isAdmin, isIssuer, error } = await checkUserRoles(
+          walletAddress
+        );
 
-        const isAdmin =
-          adminResult.status === "fulfilled" &&
-          adminResult.value.success &&
-          adminResult.value.isAdmin;
-        const isIssuer =
-          issuerResult.status === "fulfilled" &&
-          issuerResult.value.success &&
-          issuerResult.value.isIssuer;
-        const isVerifier =
-          verifierResult.status === "fulfilled" &&
-          verifierResult.value.success &&
-          verifierResult.value.isVerifier;
+        console.log("🔍 Raw role check result:", {
+          success,
+          isAdmin,
+          isIssuer,
+          error,
+        });
 
-        // Determine primary role (hierarchy: admin > issuer > verifier > holder)
+        if (!success) {
+          console.error(
+            "❌ Blockchain role verification failed:",
+            error || "Unknown error"
+          );
+          throw new Error(error || "Contract role verification failed");
+        }
+
+        // Determine primary role (hierarchy: admin > issuer > holder)
         let primaryRole = "holder"; // Default role
-        let redirectTo = "/holder";
+        let redirectTo = "/dashboard";
 
         if (isAdmin) {
           primaryRole = "admin";
-          redirectTo = "/admin";
+          redirectTo = "/admin"; // Admin isolated to admin dashboard only
+          console.log("🔍 Admin role detected - setting primaryRole to admin");
         } else if (isIssuer) {
           primaryRole = "issuer";
-          redirectTo = "/issuer";
-        } else if (isVerifier) {
-          primaryRole = "verifier";
-          redirectTo = "/verify";
+          redirectTo = "/dashboard"; // Unified dashboard for issuers and holders
+          console.log(
+            "🔍 Issuer role detected - setting primaryRole to issuer"
+          );
+        } else {
+          console.log("🔍 No special roles detected - defaulting to holder");
         }
 
         const roleData = {
           walletAddress,
           roles: {
-            isAdmin,
-            isIssuer,
-            isVerifier,
+            isAdmin: isAdmin || false,
+            isIssuer: isIssuer || false,
             isHolder: true, // Everyone is a holder
           },
           primaryRole,
@@ -138,11 +135,10 @@ export function AuthProvider({ children }) {
           roles: {
             isAdmin: false,
             isIssuer: false,
-            isVerifier: false,
             isHolder: true,
           },
           primaryRole: "holder",
-          redirectTo: "/holder",
+          redirectTo: "/dashboard",
           authenticated: true,
           error: error.message,
         };
@@ -194,6 +190,7 @@ export function AuthProvider({ children }) {
         // 3. Combine blockchain roles with profile data
         const userData = {
           walletAddress: address,
+          wallet_address: address, // alias for compatibility
           role: roleData.primaryRole,
           roles: roleData.roles,
           redirectTo: roleData.redirectTo,
@@ -203,7 +200,6 @@ export function AuthProvider({ children }) {
           name:
             userProfile?.name ||
             `User ${address.slice(0, 6)}...${address.slice(-4)}`,
-          email: userProfile?.email || null,
           createdAt: userProfile?.created_at || new Date().toISOString(),
           lastLogin: new Date().toISOString(),
         };
@@ -214,7 +210,6 @@ export function AuthProvider({ children }) {
         if (typeof window !== "undefined") {
           localStorage.setItem("walletAddress", address);
           localStorage.setItem("userRole", roleData.primaryRole);
-          localStorage.setItem("userId", userData.id); // Store user ID
           localStorage.setItem(
             "blockchainRoles",
             JSON.stringify(roleData.roles)
@@ -244,7 +239,6 @@ export function AuthProvider({ children }) {
         if (typeof window !== "undefined") {
           localStorage.removeItem("walletAddress");
           localStorage.removeItem("userRole");
-          localStorage.removeItem("userId");
           localStorage.removeItem("blockchainRoles");
         }
 
@@ -269,6 +263,13 @@ export function AuthProvider({ children }) {
     async function checkAuth() {
       try {
         setLoading(true);
+
+        // Don't auto-login if user manually logged out
+        if (manualLogout) {
+          setUser(null);
+          setLoading(false);
+          return;
+        }
 
         // Check if wallet is connected
         const address = await getCurrentWalletAddress();
@@ -296,7 +297,7 @@ export function AuthProvider({ children }) {
     }
 
     checkAuth();
-  }, [router.pathname]);
+  }, [router.pathname, manualLogout]);
 
   // Set up wallet event listeners
   useEffect(() => {
@@ -307,15 +308,15 @@ export function AuthProvider({ children }) {
       console.log("🔄 Account changed:", accounts);
 
       if (accounts.length === 0) {
-        // User disconnected wallet
+        // User disconnected wallet from MetaMask
         setUser(null);
         setRoleVerificationCache(null);
         setLastVerification(null);
+        setManualLogout(false); // Clear manual logout since this is MetaMask disconnection
 
         if (typeof window !== "undefined") {
           localStorage.removeItem("walletAddress");
           localStorage.removeItem("userRole");
-          localStorage.removeItem("userId");
           localStorage.removeItem("blockchainRoles");
         }
 
@@ -323,7 +324,8 @@ export function AuthProvider({ children }) {
           router.push("/login");
         }
       } else if (accounts[0] !== user?.walletAddress) {
-        // User switched accounts
+        // User switched accounts - clear manual logout and login with new account
+        setManualLogout(false);
         try {
           await loadUserData(accounts[0]);
         } catch (error) {
@@ -400,6 +402,7 @@ export function AuthProvider({ children }) {
     try {
       setLoading(true);
       setError(null);
+      setManualLogout(false); // Clear manual logout flag
 
       const result = await connectWallet();
 
@@ -428,6 +431,7 @@ export function AuthProvider({ children }) {
       setRoleVerificationCache(null);
       setLastVerification(null);
       setError(null);
+      setManualLogout(true); // Prevent auto-login
 
       // Clear localStorage
       if (typeof window !== "undefined") {
@@ -450,7 +454,12 @@ export function AuthProvider({ children }) {
         }).catch(console.warn);
       }
 
-      router.push("/login");
+      // Note: We don't need to explicitly disconnect from MetaMask as this would
+      // require user confirmation. Instead, we just clear our local state.
+      // The checkAuth function should respect that user is null and not auto-login
+
+      // Redirect to home page instead of login
+      router.push("/");
     } catch (err) {
       console.error("Logout error:", err);
     }

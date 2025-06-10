@@ -79,37 +79,6 @@ export default function Home() {
       <Verification />
       <CTA />
 
-      {/* Developer Quick Access (only in development mode) */}
-      {process.env.NODE_ENV === "development" && (
-        <section className="py-8 bg-slate-100">
-          <div className="container mx-auto px-4">
-            <h2 className="text-center text-xl font-bold mb-6">
-              Developer Quick Access
-            </h2>
-            <div className="flex flex-wrap justify-center gap-4">
-              <Button
-                variant="outline"
-                className="h-12 px-6 bg-white"
-                onClick={accessAsAdmin}>
-                Access as Admin
-              </Button>
-              <Button
-                variant="outline"
-                className="h-12 px-6 bg-white"
-                onClick={accessAsIssuer}>
-                Access as Issuer
-              </Button>
-              <Button
-                variant="outline"
-                className="h-12 px-6 bg-white"
-                onClick={accessAsHolder}>
-                Access as Holder
-              </Button>
-            </div>
-          </div>
-        </section>
-      )}
-
       <Footer />
     </div>
   );
