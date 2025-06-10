@@ -5,6 +5,7 @@ import jsPDF from "jspdf";
 import useNotification from "../../utils/useNotification";
 import Notification from "../Notification";
 import { getHolderCertificates } from "../../utils/dataOperations";
+import { verifyCertificateByHash } from "../../utils/contract";
 import Button from "../Button";
 
 export default function HolderDashboard({ activeTab }) {
@@ -25,15 +26,53 @@ export default function HolderDashboard({ activeTab }) {
   const [shareModalOpen, setShareModalOpen] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
   const [showCopiedMessage, setShowCopiedMessage] = useState(false);
   const [showQRSection, setShowQRSection] = useState(false);
 
   // Load certificates
   useEffect(() => {
     async function fetchCertificates() {
-      const certificates = await getHolderCertificates();
-      if (certificates && certificates.length > 0) {
-        setCertificates(certificates);
+      try {
+        const certificates = await getHolderCertificates();
+        if (certificates && certificates.length > 0) {
+          // Verify each certificate on blockchain to get current status
+          const verifiedCertificates = await Promise.all(
+            certificates.map(async (cert) => {
+              try {
+                // Only verify if we have a valid IPFS hash
+                if (cert.hash && isValidIPFSHash(cert.hash)) {
+                  const blockchainResult = await verifyCertificateByHash(
+                    cert.hash
+                  );
+                  if (blockchainResult.success && blockchainResult.exists) {
+                    // Update status based on blockchain verification
+                    return {
+                      ...cert,
+                      status: blockchainResult.isValid ? "issued" : "revoked",
+                      blockchainVerified: true,
+                    };
+                  }
+                }
+                // If blockchain verification fails, keep original status
+                return {
+                  ...cert,
+                  blockchainVerified: false,
+                };
+              } catch (error) {
+                console.warn(`Failed to verify certificate ${cert.id}:`, error);
+                return {
+                  ...cert,
+                  blockchainVerified: false,
+                };
+              }
+            })
+          );
+          setCertificates(verifiedCertificates);
+        }
+      } catch (error) {
+        console.error("Failed to fetch certificates:", error);
+        showError("Failed to load certificates");
       }
     }
     fetchCertificates();
@@ -87,14 +126,20 @@ export default function HolderDashboard({ activeTab }) {
     }
   };
 
-  // Filter certificates (only by search query now)
+  // Filter certificates by search query and status
   const filteredCertificates = certificates.filter((cert) => {
     const searchMatch =
       searchQuery === "" ||
       cert.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
       cert.issuer.toLowerCase().includes(searchQuery.toLowerCase()) ||
       cert.type.toLowerCase().includes(searchQuery.toLowerCase());
-    return searchMatch;
+
+    const statusMatch =
+      statusFilter === "all" ||
+      (statusFilter === "valid" && cert.status === "issued") ||
+      (statusFilter === "revoked" && cert.status === "revoked");
+
+    return searchMatch && statusMatch;
   });
 
   if (activeTab !== "certificates") return null;
@@ -112,7 +157,7 @@ export default function HolderDashboard({ activeTab }) {
       <div className="grid grid-cols-1 gap-8">
         <div className="bg-white rounded-lg shadow-sm p-6">
           <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center mb-6 gap-4">
-            <h2 className="text-xl font-semibold">Certificate Portfolio</h2>
+            <h2 className="text-xl font-semibold">My Portfolio</h2>
             <div className="flex flex-col sm:flex-row gap-3">
               {/* Search Input */}
               <div className="relative">
@@ -138,6 +183,33 @@ export default function HolderDashboard({ activeTab }) {
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                 />
+              </div>
+
+              {/* Status Filter */}
+              <div className="relative">
+                <select
+                  value={statusFilter}
+                  onChange={(e) => setStatusFilter(e.target.value)}
+                  className="px-4 py-2 border border-gray-300 rounded-md text-sm w-full sm:w-40 focus:outline-none focus:ring-2 focus:ring-primary-blue focus:border-transparent appearance-none bg-white">
+                  <option value="all">All Status</option>
+                  <option value="valid">✅ Valid</option>
+                  <option value="revoked">🚫 Revoked</option>
+                </select>
+                <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
+                  <svg
+                    className="h-4 w-4 text-gray-400"
+                    xmlns="http://www.w3.org/2000/svg"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor">
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M19 9l-7 7-7-7"
+                    />
+                  </svg>
+                </div>
               </div>
             </div>
           </div>
@@ -168,28 +240,82 @@ export default function HolderDashboard({ activeTab }) {
               {filteredCertificates.map((cert) => (
                 <div
                   key={cert.id}
-                  className="border border-gray-200 rounded-lg p-5 hover:shadow-md transition-shadow">
+                  className={`border rounded-lg p-5 hover:shadow-md transition-shadow ${
+                    cert.status === "revoked"
+                      ? "border-red-300 bg-red-50"
+                      : "border-gray-200"
+                  }`}>
                   <div className="mb-3">
-                    <h3 className="text-lg font-medium text-gray-800">
-                      {cert.title}
-                    </h3>
+                    <div className="flex items-center justify-between">
+                      <h3
+                        className={`text-lg font-medium ${
+                          cert.status === "revoked"
+                            ? "text-red-800"
+                            : "text-gray-800"
+                        }`}>
+                        {cert.title}
+                      </h3>
+                      <div className="flex items-center space-x-2">
+                        {cert.status === "revoked" && (
+                          <span className="px-3 py-2 text-sm font-medium text-red-700 bg-red-100 rounded-full">
+                            <i className="bx bx-error-circle"></i> Revoked
+                          </span>
+                        )}
+                        {cert.status === "issued" && (
+                          <span className="px-3 py-2 text-sm font-medium text-green-700 bg-green-100 rounded-full">
+                            <i className="bx bx-check-circle"></i> Valid
+                          </span>
+                        )}
+                        {cert.blockchainVerified && (
+                          <span
+                            className="px-3 py-2 text-sm font-medium text-blue-700 bg-blue-100 rounded-full"
+                            title="Verified on blockchain">
+                            <i className="bx bx-badge-check"></i> Verified
+                          </span>
+                        )}
+                      </div>
+                    </div>
                   </div>
                   <div className="mb-4">
-                    <p className="text-gray-600 text-sm">
+                    <p
+                      className={`text-sm ${
+                        cert.status === "revoked"
+                          ? "text-red-700"
+                          : "text-gray-600"
+                      }`}>
                       <span className="font-medium">Issuer:</span> {cert.issuer}
                     </p>
-                    <p className="text-gray-600 text-sm">
+                    <p
+                      className={`text-sm ${
+                        cert.status === "revoked"
+                          ? "text-red-700"
+                          : "text-gray-600"
+                      }`}>
                       <span className="font-medium">Issue Date:</span>{" "}
                       {cert.issueDate}
                     </p>
-                    <p className="text-gray-600 text-sm">
+                    <p
+                      className={`text-sm ${
+                        cert.status === "revoked"
+                          ? "text-red-700"
+                          : "text-gray-600"
+                      }`}>
                       <span className="font-medium">Type:</span> {cert.type}
                     </p>
+                    {cert.status === "revoked" && (
+                      <p className="text-sm text-red-600 mt-2 italic">
+                        This certificate has been revoked by the issuer.
+                      </p>
+                    )}
                   </div>
-                  <div className="border-t border-gray-200 pt-4 flex justify-center">
+                  <div className="border-t pt-4 flex justify-center border-gray-200">
                     <button
                       onClick={() => viewCertificate(cert)}
-                      className="px-4 py-2 bg-primary-blue text-white text-sm rounded-md hover:bg-blue-700 transition-colors">
+                      className={`px-4 py-2 text-sm rounded-md transition-colors ${
+                        cert.status === "revoked"
+                          ? "bg-red-600 text-white hover:bg-red-700"
+                          : "bg-primary-blue text-white hover:bg-blue-700"
+                      }`}>
                       View
                     </button>
                   </div>
@@ -197,41 +323,6 @@ export default function HolderDashboard({ activeTab }) {
               ))}
             </div>
           )}
-        </div>
-
-        {/* Verification Process Info */}
-        <div className="bg-white rounded-lg shadow-sm p-6">
-          <h2 className="text-xl font-semibold mb-4">Verification Process</h2>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 text-center">
-            {[
-              {
-                icon: "📤",
-                title: "Issued",
-                desc: "Certificate is issued to your wallet",
-              },
-              {
-                icon: "📤",
-                title: "Shared",
-                desc: "You share it with a verifier",
-              },
-              {
-                icon: "✅",
-                title: "Verified",
-                desc: "Verifier validates on blockchain",
-              },
-              {
-                icon: "🎉",
-                title: "Accepted",
-                desc: "Certificate authenticity confirmed",
-              },
-            ].map((step, idx) => (
-              <div key={idx} className="p-4 border border-gray-200 rounded-lg">
-                <div className="text-2xl mb-2">{step.icon}</div>
-                <h3 className="font-medium">{step.title}</h3>
-                <p className="text-sm text-gray-500">{step.desc}</p>
-              </div>
-            ))}
-          </div>
         </div>
       </div>
 
@@ -350,17 +441,7 @@ export default function HolderDashboard({ activeTab }) {
                   </h3>
                   <div className="bg-gray-50 p-4 rounded">
                     <div className="flex items-center mb-4">
-                      <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        className="h-5 w-5 text-green-500 mr-2"
-                        viewBox="0 0 20 20"
-                        fill="currentColor">
-                        <path
-                          fillRule="evenodd"
-                          d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
-                          clipRule="evenodd"
-                        />
-                      </svg>
+                      <i className="bx bx-check-circle text-lg text-green-500 mr-2"></i>
                       <div>
                         <p className="font-medium">Verified on Blockchain</p>
                       </div>
@@ -380,14 +461,7 @@ export default function HolderDashboard({ activeTab }) {
                           }
                           className="ml-2 text-primary-blue hover:text-blue-700 flex-shrink-0"
                           title="View on IPFS">
-                          <svg
-                            xmlns="http://www.w3.org/2000/svg"
-                            className="h-5 w-5"
-                            viewBox="0 0 20 20"
-                            fill="currentColor">
-                            <path d="M11 3a1 1 0 100 2h2.586l-6.293 6.293a1 1 0 101.414 1.414L15 6.414V9a1 1 0 102 0V4a1 1 0 00-1-1h-5z" />
-                            <path d="M5 5a2 2 0 00-2 2v8a2 2 0 002 2h8a2 2 0 002-2v-3a1 1 0 10-2 0v3H5V7h3a1 1 0 000-2H5z" />
-                          </svg>
+                          <i className="bx bx-link-external text-lg"></i>
                         </button>
                         <button
                           onClick={() =>
@@ -395,19 +469,7 @@ export default function HolderDashboard({ activeTab }) {
                           }
                           className="ml-2 text-primary-blue hover:text-blue-700 p-1"
                           title="Copy IPFS hash">
-                          <svg
-                            xmlns="http://www.w3.org/2000/svg"
-                            className="h-4 w-4"
-                            fill="none"
-                            viewBox="0 0 24 24"
-                            stroke="currentColor">
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth={2}
-                              d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
-                            />
-                          </svg>
+                          <i className="bx bx-copy text-base"></i>
                         </button>
                         {showCopiedMessage && (
                           <span className="ml-2 text-green-600 text-sm">
@@ -495,13 +557,12 @@ export default function HolderDashboard({ activeTab }) {
                     onClick={() => handleDownload(selectedCertificate, format)}
                     className="p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors text-center">
                     <div className={`${color} mb-2`}>
-                      <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        className="h-8 w-8 mx-auto"
-                        fill="currentColor"
-                        viewBox="0 0 24 24">
-                        <path d="M14,2H6A2,2 0 0,0 4,4V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V8L14,2M18,20H6V4H13V9H18V20Z" />
-                      </svg>
+                      {format === "pdf" && (
+                        <i className="bx bx-file text-3xl"></i>
+                      )}
+                      {(format === "jpg" || format === "png") && (
+                        <i className="bx bx-image text-3xl"></i>
+                      )}
                     </div>
                     <p className="text-sm font-medium">{label}</p>
                     <p className="text-xs text-gray-500">{desc}</p>
@@ -512,13 +573,7 @@ export default function HolderDashboard({ activeTab }) {
                   onClick={() => setShowQRSection(true)}
                   className="p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors text-center">
                   <div className="text-purple-500 mb-2">
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      className="h-8 w-8 mx-auto"
-                      fill="currentColor"
-                      viewBox="0 0 24 24">
-                      <path d="M3,11H5V13H3V11M11,5H13V9H11V5M9,11H13V15H11V13H9V11M15,11H17V13H15V11M19,11H21V13H19V11M12,15H14V17H12V15M3,5H9V9H7V7H5V9H3V5M3,15H9V21H7V19H5V21H3V15M15,5H21V9H19V7H17V9H15V5Z" />
-                    </svg>
+                    <i className="bx bx-qr text-3xl"></i>
                   </div>
                   <p className="text-sm font-medium">QR Code</p>
                   <p className="text-xs text-gray-500">Generate QR Code</p>

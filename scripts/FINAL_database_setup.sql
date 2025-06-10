@@ -48,13 +48,7 @@ CREATE TABLE certificates (
     title VARCHAR(255) NOT NULL,
     description TEXT NULL,
     issue_date DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    status ENUM(
-        'pending',
-        'issued',
-        'verified',
-        'rejected',
-        'revoked'
-    ) NOT NULL DEFAULT 'pending',
+    status ENUM('issued', 'revoked') NOT NULL DEFAULT 'issued',
     transaction_hash VARCHAR(66) NULL,
     block_number BIGINT NULL,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,

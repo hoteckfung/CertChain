@@ -11,44 +11,13 @@ import Head from "next/head";
 
 const DashboardPage = () => {
   const { user, loading } = useAuth();
-  // Set initial tab based on role
-  const getInitialTab = () => {
-    if (!user) return "certificates";
-    const isIssuer = user?.roles?.isIssuer || user?.role === "issuer";
-    const isAdmin = user?.roles?.isAdmin || user?.role === "admin";
+  // Initialize with default tab - will be updated by useEffect once user loads
+  const [activeTab, setActiveTab] = useState("certificates");
 
-    if (isAdmin) return "users";
-    return isIssuer ? "create" : "certificates";
-  };
-
-  const [activeTab, setActiveTab] = useState(getInitialTab());
-
-  // Fix role checking - check both the new structure and fallback to simple role
-  const isIssuer = user?.roles?.isIssuer || user?.role === "issuer";
-  const isAdmin = user?.roles?.isAdmin || user?.role === "admin";
-  const isHolder = user?.roles?.isHolder || user?.role === "holder";
-
-  // Debug logging to see user structure
-  React.useEffect(() => {
-    if (user) {
-      console.log("🔍 Dashboard User Object:", user);
-      console.log("🔍 User Role:", user?.role);
-      console.log("🔍 User Roles Object:", user?.roles);
-    }
-  }, [user]);
-
-  // Set default tab based on role when user changes
-  React.useEffect(() => {
-    if (user) {
-      if (isAdmin) {
-        setActiveTab("users");
-      } else if (isIssuer) {
-        setActiveTab("create");
-      } else if (isHolder) {
-        setActiveTab("certificates");
-      }
-    }
-  }, [user?.role, isAdmin, isIssuer, isHolder]);
+  // Simplified role checking - only use user.role string
+  const isIssuer = user?.role === "issuer";
+  const isAdmin = user?.role === "admin";
+  const isHolder = user?.role === "holder";
 
   // Show loading state - this comes AFTER all hooks are called
   if (loading || !user) {
@@ -72,15 +41,28 @@ const DashboardPage = () => {
     },
     {
       id: "create",
-      label: "Create Certificate",
+      label: "Create Certificates",
       available: isIssuer && !isAdmin,
     },
     {
       id: "issue",
-      label: "Issue Certificate",
+      label: "Issue Certificates",
       available: isIssuer && !isAdmin,
     },
   ].filter((tab) => tab.available);
+
+  // Set correct tab based on role when user loads
+  React.useEffect(() => {
+    if (user?.role) {
+      if (isAdmin) {
+        setActiveTab("users");
+      } else if (isIssuer) {
+        setActiveTab("create");
+      } else if (isHolder) {
+        setActiveTab("certificates");
+      }
+    }
+  }, [user?.role, isAdmin, isIssuer, isHolder]);
 
   return (
     <div className="flex flex-col min-h-screen">
@@ -115,7 +97,7 @@ const DashboardPage = () => {
               ? "Admin Dashboard"
               : isIssuer
               ? "Issuer Dashboard"
-              : "Your Certificates"}
+              : "Holder Dashboard"}
           </h1>
           <p className="text-xl text-gray-600">
             {isAdmin
@@ -138,17 +120,6 @@ const DashboardPage = () => {
                 {user?.walletAddress?.slice(-4)}
               </span>
             </div>
-          </div>
-
-          {/* Debug Info - Remove this after testing */}
-          <div className="mt-4 p-4 bg-gray-100 rounded-lg">
-            <p className="text-sm">
-              <strong>Debug Info:</strong>
-            </p>
-            <p className="text-sm">isIssuer: {isIssuer ? "true" : "false"}</p>
-            <p className="text-sm">isAdmin: {isAdmin ? "true" : "false"}</p>
-            <p className="text-sm">isHolder: {isHolder ? "true" : "false"}</p>
-            <p className="text-sm">user.role: {user?.role}</p>
           </div>
         </div>
 
