@@ -1,4 +1,5 @@
 import { ethers } from "ethers";
+import { isUserRejectionError } from "./errorHandling";
 
 // Contract ABI - you'll get this after compilation
 const CERTIFICATE_NFT_ABI = [
@@ -180,27 +181,7 @@ export async function issueCertificateOnChain({
     } catch (txError) {
       console.error("Error during transaction submission:", txError);
 
-      // Check for user rejection patterns
-      const isUserRejection =
-        txError.code === "ACTION_REJECTED" ||
-        txError.code === 4001 ||
-        txError.message.includes("user rejected") ||
-        txError.message.includes("User denied transaction") ||
-        txError.message.includes("ACTION_REJECTED") ||
-        txError.message.includes("ethers-user-denied") ||
-        txError.message.includes(
-          "MetaMask Tx Signature: User denied transaction signature"
-        ) ||
-        txError.reason === "rejected" ||
-        (txError.info &&
-          txError.info.error &&
-          txError.info.error.code === 4001) ||
-        (txError.info &&
-          txError.info.error &&
-          txError.info.error.message &&
-          txError.info.error.message.includes("User denied"));
-
-      if (isUserRejection) {
+      if (isUserRejectionError(txError)) {
         return {
           success: false,
           error: "Transaction was rejected by user.",
@@ -218,27 +199,7 @@ export async function issueCertificateOnChain({
     } catch (waitError) {
       console.error("Error during transaction waiting:", waitError);
 
-      // Check for user rejection patterns
-      const isUserRejection =
-        waitError.code === "ACTION_REJECTED" ||
-        waitError.code === 4001 ||
-        waitError.message.includes("user rejected") ||
-        waitError.message.includes("User denied transaction") ||
-        waitError.message.includes("ACTION_REJECTED") ||
-        waitError.message.includes("ethers-user-denied") ||
-        waitError.message.includes(
-          "MetaMask Tx Signature: User denied transaction signature"
-        ) ||
-        waitError.reason === "rejected" ||
-        (waitError.info &&
-          waitError.info.error &&
-          waitError.info.error.code === 4001) ||
-        (waitError.info &&
-          waitError.info.error &&
-          waitError.info.error.message &&
-          waitError.info.error.message.includes("User denied"));
-
-      if (isUserRejection) {
+      if (isUserRejectionError(waitError)) {
         return {
           success: false,
           error: "Transaction was rejected by user.",
@@ -305,7 +266,16 @@ export async function issueCertificateOnChain({
       stack: error.stack,
     });
 
-    // Provide more user-friendly error messages
+    // Check for user rejection first
+    if (isUserRejectionError(error)) {
+      return {
+        success: false,
+        error: "Transaction was rejected by user.",
+        userRejected: true,
+      };
+    }
+
+    // Provide more user-friendly error messages for other errors
     let userFriendlyMessage = error.message;
 
     if (error.code === "CALL_EXCEPTION") {
@@ -317,20 +287,6 @@ export async function issueCertificateOnChain({
     } else if (error.message.includes("insufficient funds")) {
       userFriendlyMessage =
         "Insufficient ETH for gas fees. Please add more ETH to your wallet.";
-    } else if (
-      error.code === "ACTION_REJECTED" ||
-      error.code === 4001 ||
-      error.message.includes("user rejected") ||
-      error.message.includes("User denied transaction") ||
-      error.message.includes("ACTION_REJECTED") ||
-      error.message.includes("ethers-user-denied") ||
-      error.message.includes(
-        "MetaMask Tx Signature: User denied transaction signature"
-      ) ||
-      error.reason === "rejected" ||
-      (error.info && error.info.error && error.info.error.code === 4001)
-    ) {
-      userFriendlyMessage = "Transaction was rejected by user.";
     }
 
     return {
@@ -458,30 +414,9 @@ export async function revokeCertificate(tokenId) {
       tx = await contract.revokeCertificate(tokenId);
       console.log("Revocation transaction submitted:", tx.hash);
     } catch (txError) {
-      // Handle errors during transaction submission
       console.error("Error during transaction submission:", txError);
 
-      // Check for user rejection patterns
-      const isUserRejection =
-        txError.code === "ACTION_REJECTED" ||
-        txError.code === 4001 ||
-        txError.message.includes("user rejected") ||
-        txError.message.includes("User denied transaction") ||
-        txError.message.includes("ACTION_REJECTED") ||
-        txError.message.includes("ethers-user-denied") ||
-        txError.message.includes(
-          "MetaMask Tx Signature: User denied transaction signature"
-        ) ||
-        txError.reason === "rejected" ||
-        (txError.info &&
-          txError.info.error &&
-          txError.info.error.code === 4001) ||
-        (txError.info &&
-          txError.info.error &&
-          txError.info.error.message &&
-          txError.info.error.message.includes("User denied"));
-
-      if (isUserRejection) {
+      if (isUserRejectionError(txError)) {
         return {
           success: false,
           error: "Transaction was rejected by user.",
@@ -497,30 +432,9 @@ export async function revokeCertificate(tokenId) {
       receipt = await tx.wait();
       console.log("Revocation confirmed:", receipt);
     } catch (waitError) {
-      // Handle errors during transaction waiting (like user rejection)
       console.error("Error during transaction waiting:", waitError);
 
-      // Check for user rejection patterns
-      const isUserRejection =
-        waitError.code === "ACTION_REJECTED" ||
-        waitError.code === 4001 ||
-        waitError.message.includes("user rejected") ||
-        waitError.message.includes("User denied transaction") ||
-        waitError.message.includes("ACTION_REJECTED") ||
-        waitError.message.includes("ethers-user-denied") ||
-        waitError.message.includes(
-          "MetaMask Tx Signature: User denied transaction signature"
-        ) ||
-        waitError.reason === "rejected" ||
-        (waitError.info &&
-          waitError.info.error &&
-          waitError.info.error.code === 4001) ||
-        (waitError.info &&
-          waitError.info.error &&
-          waitError.info.error.message &&
-          waitError.info.error.message.includes("User denied"));
-
-      if (isUserRejection) {
+      if (isUserRejectionError(waitError)) {
         return {
           success: false,
           error: "Transaction was rejected by user.",
@@ -538,41 +452,20 @@ export async function revokeCertificate(tokenId) {
     };
   } catch (error) {
     console.error("Error revoking certificate:", error);
-    console.error("Error debugging info:", {
-      code: error.code,
-      message: error.message,
-      info: error.info,
-      hasInfo: !!error.info,
-      hasInfoError: !!(error.info && error.info.error),
-      infoErrorCode: error.info && error.info.error && error.info.error.code,
-    });
 
-    // Provide more user-friendly error messages
+    // Check for user rejection first
+    if (isUserRejectionError(error)) {
+      return {
+        success: false,
+        error: "Transaction was rejected by user.",
+        userRejected: true,
+      };
+    }
+
+    // Provide more user-friendly error messages for other errors
     let userFriendlyMessage = error.message;
 
-    // Check for user rejection in multiple ways
-    const isUserRejection =
-      error.code === "ACTION_REJECTED" ||
-      error.code === 4001 ||
-      error.message.includes("user rejected") ||
-      error.message.includes("User denied transaction") ||
-      error.message.includes("ACTION_REJECTED") ||
-      error.message.includes("ethers-user-denied") ||
-      error.message.includes(
-        "MetaMask Tx Signature: User denied transaction signature"
-      ) ||
-      error.reason === "rejected" ||
-      (error.info && error.info.error && error.info.error.code === 4001) ||
-      (error.info &&
-        error.info.error &&
-        error.info.error.message &&
-        error.info.error.message.includes("User denied"));
-
-    console.log("Is user rejection?", isUserRejection);
-
-    if (isUserRejection) {
-      userFriendlyMessage = "Transaction was rejected by user.";
-    } else if (error.message.includes("insufficient funds")) {
+    if (error.message.includes("insufficient funds")) {
       userFriendlyMessage =
         "Insufficient ETH for gas fees. Please add more ETH to your wallet.";
     } else if (error.code === "CALL_EXCEPTION") {
@@ -616,11 +509,48 @@ export async function grantIssuerRole(address) {
     }
 
     const contract = await getContractWrite();
-    const tx = await contract.grantIssuerRole(address);
 
-    console.log("Grant issuer role transaction submitted:", tx.hash);
-    const receipt = await tx.wait();
-    console.log("Grant issuer role confirmed:", receipt);
+    let tx;
+    try {
+      tx = await contract.grantIssuerRole(address);
+      console.log("Grant issuer role transaction submitted:", tx.hash);
+    } catch (txError) {
+      console.error(
+        "Error during grant issuer role transaction submission:",
+        txError
+      );
+
+      if (isUserRejectionError(txError)) {
+        return {
+          success: false,
+          error: "Transaction was rejected by user.",
+          userRejected: true,
+        };
+      }
+
+      throw txError;
+    }
+
+    let receipt;
+    try {
+      receipt = await tx.wait();
+      console.log("Grant issuer role confirmed:", receipt);
+    } catch (waitError) {
+      console.error(
+        "Error during grant issuer role transaction waiting:",
+        waitError
+      );
+
+      if (isUserRejectionError(waitError)) {
+        return {
+          success: false,
+          error: "Transaction was rejected by user.",
+          userRejected: true,
+        };
+      }
+
+      throw waitError;
+    }
 
     return {
       success: true,
@@ -629,9 +559,30 @@ export async function grantIssuerRole(address) {
     };
   } catch (error) {
     console.error("Error granting issuer role:", error);
+
+    // Check for user rejection first
+    if (isUserRejectionError(error)) {
+      return {
+        success: false,
+        error: "Transaction was rejected by user.",
+        userRejected: true,
+      };
+    }
+
+    // Provide more user-friendly error messages for other errors
+    let userFriendlyMessage = error.message;
+
+    if (error.message.includes("insufficient funds")) {
+      userFriendlyMessage =
+        "Insufficient ETH for gas fees. Please add more ETH to your wallet.";
+    } else if (error.code === "CALL_EXCEPTION") {
+      userFriendlyMessage =
+        "Smart contract call failed. This could be due to insufficient permissions.";
+    }
+
     return {
       success: false,
-      error: error.message,
+      error: userFriendlyMessage,
     };
   }
 }
@@ -651,11 +602,48 @@ export async function revokeIssuerRole(address) {
     }
 
     const contract = await getContractWrite();
-    const tx = await contract.revokeIssuerRole(address);
 
-    console.log("Revoke issuer role transaction submitted:", tx.hash);
-    const receipt = await tx.wait();
-    console.log("Revoke issuer role confirmed:", receipt);
+    let tx;
+    try {
+      tx = await contract.revokeIssuerRole(address);
+      console.log("Revoke issuer role transaction submitted:", tx.hash);
+    } catch (txError) {
+      console.error(
+        "Error during revoke issuer role transaction submission:",
+        txError
+      );
+
+      if (isUserRejectionError(txError)) {
+        return {
+          success: false,
+          error: "Transaction was rejected by user.",
+          userRejected: true,
+        };
+      }
+
+      throw txError;
+    }
+
+    let receipt;
+    try {
+      receipt = await tx.wait();
+      console.log("Revoke issuer role confirmed:", receipt);
+    } catch (waitError) {
+      console.error(
+        "Error during revoke issuer role transaction waiting:",
+        waitError
+      );
+
+      if (isUserRejectionError(waitError)) {
+        return {
+          success: false,
+          error: "Transaction was rejected by user.",
+          userRejected: true,
+        };
+      }
+
+      throw waitError;
+    }
 
     return {
       success: true,
@@ -664,9 +652,30 @@ export async function revokeIssuerRole(address) {
     };
   } catch (error) {
     console.error("Error revoking issuer role:", error);
+
+    // Check for user rejection first
+    if (isUserRejectionError(error)) {
+      return {
+        success: false,
+        error: "Transaction was rejected by user.",
+        userRejected: true,
+      };
+    }
+
+    // Provide more user-friendly error messages for other errors
+    let userFriendlyMessage = error.message;
+
+    if (error.message.includes("insufficient funds")) {
+      userFriendlyMessage =
+        "Insufficient ETH for gas fees. Please add more ETH to your wallet.";
+    } else if (error.code === "CALL_EXCEPTION") {
+      userFriendlyMessage =
+        "Smart contract call failed. This could be due to insufficient permissions.";
+    }
+
     return {
       success: false,
-      error: error.message,
+      error: userFriendlyMessage,
     };
   }
 }
@@ -834,27 +843,7 @@ export async function unpauseContract() {
     } catch (txError) {
       console.error("Error during unpause transaction submission:", txError);
 
-      // Check for user rejection patterns
-      const isUserRejection =
-        txError.code === "ACTION_REJECTED" ||
-        txError.code === 4001 ||
-        txError.message.includes("user rejected") ||
-        txError.message.includes("User denied transaction") ||
-        txError.message.includes("ACTION_REJECTED") ||
-        txError.message.includes("ethers-user-denied") ||
-        txError.message.includes(
-          "MetaMask Tx Signature: User denied transaction signature"
-        ) ||
-        txError.reason === "rejected" ||
-        (txError.info &&
-          txError.info.error &&
-          txError.info.error.code === 4001) ||
-        (txError.info &&
-          txError.info.error &&
-          txError.info.error.message &&
-          txError.info.error.message.includes("User denied"));
-
-      if (isUserRejection) {
+      if (isUserRejectionError(txError)) {
         return {
           success: false,
           error: "Transaction was rejected by user.",
@@ -871,27 +860,7 @@ export async function unpauseContract() {
     } catch (waitError) {
       console.error("Error during unpause transaction waiting:", waitError);
 
-      // Check for user rejection patterns
-      const isUserRejection =
-        waitError.code === "ACTION_REJECTED" ||
-        waitError.code === 4001 ||
-        waitError.message.includes("user rejected") ||
-        waitError.message.includes("User denied transaction") ||
-        waitError.message.includes("ACTION_REJECTED") ||
-        waitError.message.includes("ethers-user-denied") ||
-        waitError.message.includes(
-          "MetaMask Tx Signature: User denied transaction signature"
-        ) ||
-        waitError.reason === "rejected" ||
-        (waitError.info &&
-          waitError.info.error &&
-          waitError.info.error.code === 4001) ||
-        (waitError.info &&
-          waitError.info.error &&
-          waitError.info.error.message &&
-          waitError.info.error.message.includes("User denied"));
-
-      if (isUserRejection) {
+      if (isUserRejectionError(waitError)) {
         return {
           success: false,
           error: "Transaction was rejected by user.",
@@ -909,24 +878,19 @@ export async function unpauseContract() {
   } catch (error) {
     console.error("Error unpausing contract:", error);
 
-    // Provide more user-friendly error messages
+    // Check for user rejection first
+    if (isUserRejectionError(error)) {
+      return {
+        success: false,
+        error: "Transaction was rejected by user.",
+        userRejected: true,
+      };
+    }
+
+    // Provide more user-friendly error messages for other errors
     let userFriendlyMessage = error.message;
 
-    if (
-      error.code === "ACTION_REJECTED" ||
-      error.code === 4001 ||
-      error.message.includes("user rejected") ||
-      error.message.includes("User denied transaction") ||
-      error.message.includes("ACTION_REJECTED") ||
-      error.message.includes("ethers-user-denied") ||
-      error.message.includes(
-        "MetaMask Tx Signature: User denied transaction signature"
-      ) ||
-      error.reason === "rejected" ||
-      (error.info && error.info.error && error.info.error.code === 4001)
-    ) {
-      userFriendlyMessage = "Transaction was rejected by user.";
-    } else if (error.message.includes("insufficient funds")) {
+    if (error.message.includes("insufficient funds")) {
       userFriendlyMessage =
         "Insufficient ETH for gas fees. Please add more ETH to your wallet.";
     } else if (error.code === "CALL_EXCEPTION") {
@@ -962,27 +926,7 @@ export async function pauseContract() {
     } catch (txError) {
       console.error("Error during pause transaction submission:", txError);
 
-      // Check for user rejection patterns
-      const isUserRejection =
-        txError.code === "ACTION_REJECTED" ||
-        txError.code === 4001 ||
-        txError.message.includes("user rejected") ||
-        txError.message.includes("User denied transaction") ||
-        txError.message.includes("ACTION_REJECTED") ||
-        txError.message.includes("ethers-user-denied") ||
-        txError.message.includes(
-          "MetaMask Tx Signature: User denied transaction signature"
-        ) ||
-        txError.reason === "rejected" ||
-        (txError.info &&
-          txError.info.error &&
-          txError.info.error.code === 4001) ||
-        (txError.info &&
-          txError.info.error &&
-          txError.info.error.message &&
-          txError.info.error.message.includes("User denied"));
-
-      if (isUserRejection) {
+      if (isUserRejectionError(txError)) {
         return {
           success: false,
           error: "Transaction was rejected by user.",
@@ -999,27 +943,7 @@ export async function pauseContract() {
     } catch (waitError) {
       console.error("Error during pause transaction waiting:", waitError);
 
-      // Check for user rejection patterns
-      const isUserRejection =
-        waitError.code === "ACTION_REJECTED" ||
-        waitError.code === 4001 ||
-        waitError.message.includes("user rejected") ||
-        waitError.message.includes("User denied transaction") ||
-        waitError.message.includes("ACTION_REJECTED") ||
-        waitError.message.includes("ethers-user-denied") ||
-        waitError.message.includes(
-          "MetaMask Tx Signature: User denied transaction signature"
-        ) ||
-        waitError.reason === "rejected" ||
-        (waitError.info &&
-          waitError.info.error &&
-          waitError.info.error.code === 4001) ||
-        (waitError.info &&
-          waitError.info.error &&
-          waitError.info.error.message &&
-          waitError.info.error.message.includes("User denied"));
-
-      if (isUserRejection) {
+      if (isUserRejectionError(waitError)) {
         return {
           success: false,
           error: "Transaction was rejected by user.",
@@ -1037,24 +961,19 @@ export async function pauseContract() {
   } catch (error) {
     console.error("Error pausing contract:", error);
 
-    // Provide more user-friendly error messages
+    // Check for user rejection first
+    if (isUserRejectionError(error)) {
+      return {
+        success: false,
+        error: "Transaction was rejected by user.",
+        userRejected: true,
+      };
+    }
+
+    // Provide more user-friendly error messages for other errors
     let userFriendlyMessage = error.message;
 
-    if (
-      error.code === "ACTION_REJECTED" ||
-      error.code === 4001 ||
-      error.message.includes("user rejected") ||
-      error.message.includes("User denied transaction") ||
-      error.message.includes("ACTION_REJECTED") ||
-      error.message.includes("ethers-user-denied") ||
-      error.message.includes(
-        "MetaMask Tx Signature: User denied transaction signature"
-      ) ||
-      error.reason === "rejected" ||
-      (error.info && error.info.error && error.info.error.code === 4001)
-    ) {
-      userFriendlyMessage = "Transaction was rejected by user.";
-    } else if (error.message.includes("insufficient funds")) {
+    if (error.message.includes("insufficient funds")) {
       userFriendlyMessage =
         "Insufficient ETH for gas fees. Please add more ETH to your wallet.";
     } else if (error.code === "CALL_EXCEPTION") {

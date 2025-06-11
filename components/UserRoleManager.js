@@ -31,6 +31,7 @@ import {
   grantIssuerRole,
   revokeIssuerRole,
 } from "../utils/contract";
+import { isResultUserRejection } from "../utils/errorHandling";
 import {
   Loader2,
   CheckCircle2,
@@ -146,6 +147,11 @@ const UserRoleManager = () => {
       }
 
       if (!result.success) {
+        // Handle user rejection gracefully - don't throw error
+        if (isResultUserRejection(result)) {
+          setError("Transaction was cancelled by user.");
+          return; // Exit gracefully without throwing
+        }
         throw new Error(result.error || "Blockchain transaction failed");
       }
 

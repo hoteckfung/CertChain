@@ -11,6 +11,7 @@ import {
   unpauseContract,
   getContractStatus,
 } from "../../utils/contract";
+import { isResultUserRejection } from "../../utils/errorHandling";
 import Button from "../Button";
 
 export default function IssuerDashboard({ activeTab }) {
@@ -258,10 +259,7 @@ export default function IssuerDashboard({ activeTab }) {
         console.error("🚨 DEBUG: Blockchain call failed:", result.error);
 
         // Handle user rejection gracefully
-        if (
-          result.error &&
-          result.error.includes("Transaction was rejected by user")
-        ) {
+        if (isResultUserRejection(result)) {
           showInfo("Transaction was cancelled. No certificate was issued.");
           return; // Exit early without showing error
         }
@@ -323,19 +321,6 @@ export default function IssuerDashboard({ activeTab }) {
         stack: error.stack,
         cause: error.cause,
       });
-
-      // Handle user rejection gracefully even if thrown as exception
-      if (
-        error.code === "ACTION_REJECTED" ||
-        error.code === 4001 ||
-        error.message.includes("user rejected") ||
-        error.message.includes("User denied transaction") ||
-        error.message.includes("ACTION_REJECTED") ||
-        (error.info && error.info.error && error.info.error.code === 4001)
-      ) {
-        showInfo("Transaction was cancelled. No certificate was issued.");
-        return; // Exit early without showing error
-      }
 
       showError(`Failed to issue certificate: ${error.message}`);
     } finally {
@@ -826,53 +811,13 @@ export default function IssuerDashboard({ activeTab }) {
 
     setIsRevoking(true);
 
-    // Handle user rejection at the lowest level - catch the raw error immediately
     try {
       showInfo("Revoking certificate on blockchain...");
-
-      // Wrap the call in its own try-catch to intercept user rejections immediately
-      let result;
-      try {
-        result = await revokeCertificate(certificate.tokenId);
-      } catch (rawError) {
-        console.log("Raw error caught in dashboard:", rawError);
-
-        // Check for user rejection patterns in the raw error
-        const isUserRejection =
-          rawError.code === "ACTION_REJECTED" ||
-          rawError.code === 4001 ||
-          rawError.message.includes("user rejected") ||
-          rawError.message.includes("User denied transaction") ||
-          rawError.message.includes("ACTION_REJECTED") ||
-          rawError.message.includes("ethers-user-denied") ||
-          rawError.message.includes(
-            "MetaMask Tx Signature: User denied transaction signature"
-          ) ||
-          rawError.reason === "rejected" ||
-          (rawError.info &&
-            rawError.info.error &&
-            rawError.info.error.code === 4001) ||
-          (rawError.info &&
-            rawError.info.error &&
-            rawError.info.error.message &&
-            rawError.info.error.message.includes("User denied"));
-
-        if (isUserRejection) {
-          showInfo("Transaction was cancelled. Certificate was not revoked.");
-          setRevokeConfirmModal({ show: false, certificate: null });
-          return;
-        }
-
-        // If not user rejection, re-throw the error
-        throw rawError;
-      }
+      const result = await revokeCertificate(certificate.tokenId);
 
       if (!result.success) {
         // Handle user rejection gracefully from structured response
-        if (
-          result.error &&
-          result.error.includes("Transaction was rejected by user")
-        ) {
+        if (isResultUserRejection(result)) {
           showInfo("Transaction was cancelled. Certificate was not revoked.");
           setRevokeConfirmModal({ show: false, certificate: null });
           return;
@@ -906,38 +851,6 @@ export default function IssuerDashboard({ activeTab }) {
       setRevokeConfirmModal({ show: false, certificate: null });
     } catch (error) {
       console.error("Error revoking certificate:", error);
-
-      // Handle user rejection gracefully even if thrown as exception
-      console.log("Dashboard error debug:", {
-        code: error.code,
-        message: error.message,
-        info: error.info,
-      });
-
-      const isUserRejection =
-        error.code === "ACTION_REJECTED" ||
-        error.code === 4001 ||
-        error.message.includes("user rejected") ||
-        error.message.includes("User denied transaction") ||
-        error.message.includes("ACTION_REJECTED") ||
-        error.message.includes("ethers-user-denied") ||
-        error.message.includes(
-          "MetaMask Tx Signature: User denied transaction signature"
-        ) ||
-        error.reason === "rejected" ||
-        (error.info && error.info.error && error.info.error.code === 4001) ||
-        (error.info &&
-          error.info.error &&
-          error.info.error.message &&
-          error.info.error.message.includes("User denied"));
-
-      console.log("Dashboard: Is user rejection?", isUserRejection);
-
-      if (isUserRejection) {
-        showInfo("Transaction was cancelled. Certificate was not revoked.");
-        setRevokeConfirmModal({ show: false, certificate: null });
-        return;
-      }
 
       showError(`Failed to revoke certificate: ${error.message}`);
     } finally {
@@ -1122,10 +1035,7 @@ export default function IssuerDashboard({ activeTab }) {
         await checkBlockchainStatus();
       } else {
         // Handle user rejection gracefully
-        if (
-          result.error &&
-          result.error.includes("Transaction was rejected by user")
-        ) {
+        if (isResultUserRejection(result)) {
           showInfo("Transaction was cancelled. Contract remains paused.");
           return; // Exit early without showing error
         }
@@ -1134,19 +1044,6 @@ export default function IssuerDashboard({ activeTab }) {
       }
     } catch (error) {
       console.error("Error unpausing contract:", error);
-
-      // Handle user rejection gracefully even if thrown as exception
-      if (
-        error.code === "ACTION_REJECTED" ||
-        error.code === 4001 ||
-        error.message.includes("user rejected") ||
-        error.message.includes("User denied transaction") ||
-        error.message.includes("ACTION_REJECTED") ||
-        (error.info && error.info.error && error.info.error.code === 4001)
-      ) {
-        showInfo("Transaction was cancelled. Contract remains paused.");
-        return; // Exit early without showing error
-      }
 
       showError("Failed to unpause contract");
     } finally {
