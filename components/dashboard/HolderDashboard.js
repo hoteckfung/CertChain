@@ -8,7 +8,7 @@ import { getHolderCertificates } from "../../utils/dataOperations";
 import { verifyCertificateByHash } from "../../utils/contract";
 import Button from "../Button";
 
-export default function HolderDashboard({ activeTab }) {
+export default function HolderDashboard({ activeTab, user }) {
   // Notification state
   const {
     notification,
@@ -33,8 +33,13 @@ export default function HolderDashboard({ activeTab }) {
   // Load certificates
   useEffect(() => {
     async function fetchCertificates() {
+      if (!user?.walletAddress) {
+        console.warn("No wallet address available for fetching certificates");
+        return;
+      }
+
       try {
-        const certificates = await getHolderCertificates();
+        const certificates = await getHolderCertificates(user.walletAddress);
         if (certificates && certificates.length > 0) {
           // Verify each certificate on blockchain to get current status
           const verifiedCertificates = await Promise.all(
@@ -69,14 +74,18 @@ export default function HolderDashboard({ activeTab }) {
             })
           );
           setCertificates(verifiedCertificates);
+        } else {
+          setCertificates([]);
         }
       } catch (error) {
         console.error("Failed to fetch certificates:", error);
         showError("Failed to load certificates");
+        setCertificates([]);
       }
     }
+
     fetchCertificates();
-  }, []);
+  }, [user?.walletAddress]);
 
   // Core functions
   const viewCertificate = (cert) => setSelectedCertificate(cert);
@@ -156,11 +165,11 @@ export default function HolderDashboard({ activeTab }) {
       {/* Certificates Tab */}
       <div className="grid grid-cols-1 gap-8">
         <div className="bg-white rounded-lg shadow-sm p-6">
-          <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center mb-6 gap-4">
-            <h2 className="text-xl font-semibold">My Portfolio</h2>
-            <div className="flex flex-col sm:flex-row gap-3">
+          <div className="flex flex-col lg:flex-row lg:justify-between lg:items-center mb-6 gap-4">
+            <h2 className="text-xl font-semibold break-words">My Portfolio</h2>
+            <div className="flex flex-col sm:flex-row gap-3 w-full lg:w-auto">
               {/* Search Input */}
-              <div className="relative">
+              <div className="relative flex-1 sm:flex-none">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                   <svg
                     className="h-4 w-4 text-gray-400"
@@ -186,7 +195,7 @@ export default function HolderDashboard({ activeTab }) {
               </div>
 
               {/* Status Filter */}
-              <div className="relative">
+              <div className="relative flex-shrink-0">
                 <select
                   value={statusFilter}
                   onChange={(e) => setStatusFilter(e.target.value)}
@@ -236,39 +245,42 @@ export default function HolderDashboard({ activeTab }) {
               </p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
               {filteredCertificates.map((cert) => (
                 <div
                   key={cert.id}
-                  className={`border rounded-lg p-5 hover:shadow-md transition-shadow ${
+                  className={`border rounded-lg p-5 hover:shadow-md transition-shadow overflow-hidden ${
                     cert.status === "revoked"
                       ? "border-red-300 bg-red-50"
                       : "border-gray-200"
                   }`}>
                   <div className="mb-3">
-                    <div className="flex items-center justify-between">
+                    <div className="flex items-start justify-between gap-3">
                       <h3
-                        className={`text-lg font-medium ${
+                        className={`text-lg font-medium flex-1 min-w-0 ${
                           cert.status === "revoked"
                             ? "text-red-800"
                             : "text-gray-800"
-                        }`}>
-                        {cert.title}
+                        }`}
+                        title={cert.title}>
+                        <span className="line-clamp-2 break-words">
+                          {cert.title}
+                        </span>
                       </h3>
-                      <div className="flex items-center space-x-2">
+                      <div className="flex flex-col items-end space-y-1 flex-shrink-0">
                         {cert.status === "revoked" && (
-                          <span className="px-3 py-2 text-sm font-medium text-red-700 bg-red-100 rounded-full">
+                          <span className="px-2 py-1 text-xs font-medium text-red-700 bg-red-100 rounded-full whitespace-nowrap">
                             <i className="bx bx-error-circle"></i> Revoked
                           </span>
                         )}
                         {cert.status === "issued" && (
-                          <span className="px-3 py-2 text-sm font-medium text-green-700 bg-green-100 rounded-full">
+                          <span className="px-2 py-1 text-xs font-medium text-green-700 bg-green-100 rounded-full whitespace-nowrap">
                             <i className="bx bx-check-circle"></i> Valid
                           </span>
                         )}
                         {cert.blockchainVerified && (
                           <span
-                            className="px-3 py-2 text-sm font-medium text-blue-700 bg-blue-100 rounded-full"
+                            className="px-2 py-1 text-xs font-medium text-blue-700 bg-blue-100 rounded-full whitespace-nowrap"
                             title="Verified on blockchain">
                             <i className="bx bx-badge-check"></i> Verified
                           </span>
@@ -276,14 +288,17 @@ export default function HolderDashboard({ activeTab }) {
                       </div>
                     </div>
                   </div>
-                  <div className="mb-4">
+                  <div className="mb-4 space-y-2">
                     <p
-                      className={`text-sm ${
+                      className={`text-sm break-words ${
                         cert.status === "revoked"
                           ? "text-red-700"
                           : "text-gray-600"
                       }`}>
-                      <span className="font-medium">Issuer:</span> {cert.issuer}
+                      <span className="font-medium">Issuer:</span>{" "}
+                      <span className="line-clamp-1" title={cert.issuer}>
+                        {cert.issuer}
+                      </span>
                     </p>
                     <p
                       className={`text-sm ${
@@ -295,15 +310,18 @@ export default function HolderDashboard({ activeTab }) {
                       {cert.issueDate}
                     </p>
                     <p
-                      className={`text-sm ${
+                      className={`text-sm break-words ${
                         cert.status === "revoked"
                           ? "text-red-700"
                           : "text-gray-600"
                       }`}>
-                      <span className="font-medium">Type:</span> {cert.type}
+                      <span className="font-medium">Type:</span>{" "}
+                      <span className="line-clamp-1" title={cert.type}>
+                        {cert.type}
+                      </span>
                     </p>
                     {cert.status === "revoked" && (
-                      <p className="text-sm text-red-600 mt-2 italic">
+                      <p className="text-sm text-red-600 mt-2 italic break-words">
                         This certificate has been revoked by the issuer.
                       </p>
                     )}

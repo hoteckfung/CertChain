@@ -67,11 +67,11 @@ const DashboardPage = () => {
   // Render dashboard component
   const renderDashboardComponent = () => {
     if (isAdmin) {
-      return <AdminDashboard activeTab={activeTab} />;
+      return <AdminDashboard activeTab={activeTab} user={user} />;
     } else if (isIssuer) {
-      return <IssuerDashboard activeTab={activeTab} />;
+      return <IssuerDashboard activeTab={activeTab} user={user} />;
     } else {
-      return <HolderDashboard activeTab={activeTab} />;
+      return <HolderDashboard activeTab={activeTab} user={user} />;
     }
   };
 
@@ -100,33 +100,35 @@ const DashboardPage = () => {
 
       <Navbar />
 
-      <main className="flex-grow container mx-auto px-4 py-8">
+      <main className="flex-grow container mx-auto px-4 py-8 max-w-7xl">
         {/* Dashboard Header */}
         <div className="mb-8">
-          <h1 className="text-4xl font-bold text-gray-900 mb-2">
+          <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900 mb-2 break-words">
             {isAdmin
               ? "Admin Dashboard"
               : isIssuer
               ? "Issuer Dashboard"
               : "Holder Dashboard"}
           </h1>
-          <p className="text-xl text-gray-600">
+          <p className="text-lg sm:text-xl text-gray-600 break-words">
             {isAdmin
               ? "Manage users and monitor certificate activities"
               : isIssuer
               ? "Create, issue, and manage blockchain certificates"
               : "View, download, and share your certificates"}
           </p>
-          <div className="mt-4 flex items-center space-x-4">
-            <div className="bg-white px-4 py-2 rounded-lg shadow">
+          <div className="mt-4 flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-4">
+            <div className="bg-white px-4 py-2 rounded-lg shadow min-w-0 flex-shrink-0">
               <span className="text-sm text-gray-500">Role:</span>
               <span className="ml-2 font-semibold text-blue-600 capitalize">
                 {user?.role}
               </span>
             </div>
-            <div className="bg-white px-4 py-2 rounded-lg shadow">
+            <div className="bg-white px-4 py-2 rounded-lg shadow min-w-0 overflow-hidden">
               <span className="text-sm text-gray-500">Wallet:</span>
-              <span className="ml-2 font-mono text-sm">
+              <span
+                className="ml-2 font-mono text-sm break-all"
+                title={user?.walletAddress}>
                 {user?.walletAddress?.slice(0, 6)}...
                 {user?.walletAddress?.slice(-4)}
               </span>
@@ -135,18 +137,18 @@ const DashboardPage = () => {
         </div>
 
         {/* Tab Navigation */}
-        <div className="bg-white rounded-lg shadow-sm mb-8">
-          <div className="flex border-b">
+        <div className="bg-white rounded-lg shadow-sm mb-8 overflow-hidden">
+          <div className="flex overflow-x-auto border-b">
             {availableTabs.map((tab) => (
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
-                className={`px-6 py-3 font-medium ${
+                className={`px-4 sm:px-6 py-3 font-medium whitespace-nowrap flex-shrink-0 ${
                   activeTab === tab.id
                     ? "text-primary-blue border-b-2 border-primary-blue"
                     : "text-gray-500 hover:text-gray-700"
                 }`}>
-                {tab.label}
+                <span className="truncate">{tab.label}</span>
               </button>
             ))}
           </div>

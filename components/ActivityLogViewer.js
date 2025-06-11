@@ -83,10 +83,8 @@ export default function ActivityLogViewer() {
   const [filters, setFilters] = useState({
     type: "all",
     searchTerm: "",
-    walletAddress: "",
-    startDate: "",
-    endDate: "",
   });
+  const [searchInput, setSearchInput] = useState(""); // Separate state for search input
   const [pagination, setPagination] = useState({
     currentPage: 1,
     totalPages: 1,
@@ -135,7 +133,7 @@ export default function ActivityLogViewer() {
     fetchLogs();
   }, []);
 
-  // Refresh when filters change
+  // Refresh when filters change (but not search term since we handle that manually)
   useEffect(() => {
     if (pagination.currentPage === 1) {
       fetchLogs(1);
@@ -143,17 +141,38 @@ export default function ActivityLogViewer() {
       setPagination((prev) => ({ ...prev, currentPage: 1 }));
       fetchLogs(1);
     }
-  }, [filters]);
+  }, [filters.type]); // Only trigger on type filter change
 
   // Handle filter changes
   const handleFilterChange = (key, value) => {
     setFilters((prev) => ({ ...prev, [key]: value }));
   };
 
+  // Handle search - only when search icon is clicked
+  const handleSearch = () => {
+    handleFilterChange("searchTerm", searchInput);
+  };
+
+  // Handle Enter key press in search input
+  const handleSearchKeyPress = (e) => {
+    if (e.key === "Enter") {
+      handleSearch();
+    }
+  };
+
   // Handle manual refresh
   const handleRefresh = () => {
     setRefreshing(true);
     fetchLogs(pagination.currentPage, false);
+  };
+
+  // Handle clear filters
+  const handleClearFilters = () => {
+    setFilters({
+      type: "all",
+      searchTerm: "",
+    });
+    setSearchInput("");
   };
 
   // Handle pagination
@@ -319,53 +338,53 @@ export default function ActivityLogViewer() {
       <CardContent>
         {/* Filters */}
         <div className="mb-6 space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
             {/* Activity Type Filter */}
-            <Select
-              value={filters.type}
-              onValueChange={(value) => handleFilterChange("type", value)}>
-              <SelectTrigger>
-                <SelectValue placeholder="Filter by type" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Activities</SelectItem>
-                {Object.entries(ACTIVITY_TYPES).map(([key, config]) => (
-                  <SelectItem key={key} value={key}>
-                    {config.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-
-            {/* Search */}
-            <div className="relative">
-              <Search className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
-              <Input
-                placeholder="Search details, addresses..."
-                value={filters.searchTerm}
-                onChange={(e) =>
-                  handleFilterChange("searchTerm", e.target.value)
-                }
-                className="pl-9"
-              />
+            <div className="md:col-span-3">
+              <Select
+                value={filters.type}
+                onValueChange={(value) => handleFilterChange("type", value)}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Filter by type" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Activities</SelectItem>
+                  {Object.entries(ACTIVITY_TYPES).map(([key, config]) => (
+                    <SelectItem key={key} value={key}>
+                      {config.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
 
-            {/* Wallet Address Filter */}
-            <Input
-              placeholder="Filter by wallet address"
-              value={filters.walletAddress}
-              onChange={(e) =>
-                handleFilterChange("walletAddress", e.target.value)
-              }
-            />
+            {/* Search with manual trigger */}
+            <div className="relative md:col-span-7">
+              <Input
+                placeholder="Search details, addresses..."
+                value={searchInput}
+                onChange={(e) => setSearchInput(e.target.value)}
+                onKeyPress={handleSearchKeyPress}
+                className="pr-10"
+              />
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleSearch}
+                className="absolute right-1 top-1 h-7 w-7 p-0">
+                <Search className="h-4 w-4" />
+              </Button>
+            </div>
 
-            {/* Date Range - simplified for now */}
-            <Input
-              type="date"
-              placeholder="Start date"
-              value={filters.startDate}
-              onChange={(e) => handleFilterChange("startDate", e.target.value)}
-            />
+            {/* Clear Filters Button */}
+            <div className="md:col-span-2">
+              <Button
+                variant="outline"
+                onClick={handleClearFilters}
+                className="text-sm w-full">
+                Clear Filters
+              </Button>
+            </div>
           </div>
         </div>
 

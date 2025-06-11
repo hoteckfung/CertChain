@@ -4,107 +4,290 @@
 [![Docker](https://img.shields.io/badge/Docker-Ready-blue.svg)](https://docker.com)
 [![Blockchain](https://img.shields.io/badge/Blockchain-Ethereum-purple.svg)](https://ethereum.org)
 
-A modern, **blockchain-first certificate issuance and verification platform** built with Next.js, Smart Contracts, and MySQL. Issue tamper-proof NFT certificates with secure role-based access control.
+A modern, **blockchain-first certificate issuance and verification platform** built with Next.js, Smart Contracts, and MySQL. Issue tamper-proof NFT certificates with secure role-based access control and comprehensive activity monitoring.
 
-## 🚀 **Quick Start - Get Running in 10 Minutes**
+## 🚀 **Quick Start - Complete Setup Guide**
 
-Get CertChain running with a simple 4-step process!
+Get CertChain running from scratch with this comprehensive guide!
 
 ### Prerequisites
 
 - **Node.js** (v16 or higher) - [Download here](https://nodejs.org)
 - **Docker Desktop** - [Download here](https://docker.com/products/docker-desktop)
 - **Git** - [Download here](https://git-scm.com)
+- **MetaMask Browser Extension** - [Install here](https://metamask.io)
 
-### Step 1: Clone & Install Dependencies
+### Step 1: Clone Repository & Install Dependencies
 
 ```bash
 git clone https://github.com/hoteckfung/CertChain.git
-
+cd CertChain
 npm install
 ```
 
-### Step 2: Deploy Web Application & Database
+### Step 2: Environment Configuration
+
+#### 2.1 Create Environment File
+
+```bash
+# Copy the example environment file
+cp .env.example .env.local
+
+# Or create manually with these required variables:
+```
+
+Create `.env.local` in the project root with the following content:
+
+```env
+# Database Configuration (auto-configured by Docker)
+MYSQL_HOST=mysql
+MYSQL_PORT=3306
+MYSQL_USER=certchain_user
+MYSQL_PASSWORD=certchain_password
+MYSQL_DATABASE=certchain
+
+# Blockchain Configuration
+# These will be updated after you deploy your smart contract
+NEXT_PUBLIC_CONTRACT_ADDRESS=
+NEXT_PUBLIC_CHAIN_ID=1337
+NEXT_PUBLIC_RPC_URL=http://127.0.0.1:7545
+
+# Deployer Configuration (REQUIRED for smart contract deployment)
+# Get this from Ganache GUI - click the key icon next to any account
+DEPLOYER_PRIVATE_KEY=
+
+# Application Settings
+NODE_ENV=development
+```
+
+#### 2.2 Set Up Deployer Private Key
+
+**⚠️ Important: You need a deployer private key to deploy smart contracts**
+
+**Use Ganache Account (Recommended for Development)**
+
+1. Start Ganache GUI (see Step 4.1 below for detailed instructions)
+2. Click the 🔑 icon next to the first account
+3. Copy the private key
+4. Add it to `.env.local`:
+   ```env
+   DEPLOYER_PRIVATE_KEY=0xYourGanachePrivateKeyHere
+   ```
+
+### Step 3: Database Setup
+
+#### 3.1 Start Database & Web Application
 
 ```bash
 # Windows users
 scripts\deploy.bat
 
 # Linux/Mac users
+chmod +x scripts/deploy.sh
 ./scripts/deploy.sh
 
 # Or manually with Docker
 docker-compose up -d
 ```
 
-**This automatically sets up:**
+#### 3.2 Verify Database Health
 
-- ✅ MySQL database with schema and sample data
-- ✅ Next.js web application
-- ✅ phpMyAdmin for database management
-- ✅ Health monitoring endpoints
+```bash
+# Check if everything is running
+curl http://localhost:3000/api/health
 
-### Step 3: Set Up Blockchain (Ganache + Smart Contract)
+# You should see:
+# {"status":"healthy","database":"connected","timestamp":"..."}
+```
 
-#### 3.1 Install and Configure Ganache
+**Access Points After Database Setup:**
+
+- 🌐 **Web App**: [http://localhost:3000](http://localhost:3000)
+- 📊 **Database Admin**: [http://localhost:8080](http://localhost:8080) (user: `certchain_user`, password: `certchain_password`)
+
+### Step 4: Blockchain Setup
+
+#### 4.1 Install and Configure Ganache
 
 1. **Download Ganache GUI**: Visit [https://trufflesuite.com/ganache/](https://trufflesuite.com/ganache/)
 2. **Install and open** the application
 3. **Create workspace**:
+
    - Click **"QUICKSTART"** (recommended) - auto-configures everything correctly
    - OR create **"NEW WORKSPACE"** with these settings:
      - Server: `HTTP://127.0.0.1:7545`
      - Chain ID: `1337`
+     - Network ID: `1337`
 
-#### 3.2 Deploy Smart Contract
+4. **Verify Ganache is running**: You should see 10 accounts with 100 ETH each
+
+#### 4.2 Deploy Smart Contract
 
 ```bash
-# Deploy the certificate NFT contract
+# Compile and deploy the certificate NFT contract
+npx hardhat compile
 npx hardhat run scripts/deploy.js --network ganache
 ```
 
-**Copy the contract address from the output**, then update your configuration:
+**Important**: Copy the contract address from the deploy output!
+
+Example output:
+
+```
+CertificateNFT deployed to: 0x5FbDB2315678afecb367f032d93F642f64180aa3
+```
+
+#### 4.3 Update Configuration with Contract Address
 
 ```bash
 # Update environment files with your new contract address
 node scripts/update-contract-address.js 0xYourNewContractAddress
 ```
 
-This automatically:
+This script automatically:
 
 - ✅ Updates `.env.local`
 - ✅ Updates `docker-compose.yml`
 - ✅ Rebuilds Docker container
 - ✅ Restarts the application
 
-### Step 4: Configure MetaMask & Test
+### Step 5: MetaMask Configuration
 
-1. **Add Ganache network to MetaMask**:
+#### 5.1 Add Ganache Network to MetaMask
 
-   - Network Name: `Ganache Local`
-   - RPC URL: `http://127.0.0.1:7545`
-   - Chain ID: `1337`
-   - Currency: `ETH`
+In MetaMask:
 
-2. **Import test account**:
+1. Click network dropdown (usually shows "Ethereum Mainnet")
+2. Click "Add Network" → "Add a network manually"
+3. Enter these details:
+   - **Network Name**: `Ganache Local`
+   - **New RPC URL**: `http://127.0.0.1:7545`
+   - **Chain ID**: `1337`
+   - **Currency Symbol**: `ETH`
+   - **Block Explorer URL**: (leave empty)
 
-   - In Ganache GUI: Click 🔑 next to any account
-   - Copy the private key
-   - In MetaMask: Import Account → Paste private key
+#### 5.2 Import Test Account
 
-3. **Test the system**:
-   - Visit: [http://localhost:3000](http://localhost:3000)
-   - Connect wallet and verify role detection
-   - Access admin dashboard: [http://localhost:3000/dashboard](http://localhost:3000/dashboard) (admin users)
+1. **In Ganache GUI**: Click 🔑 next to any account (first account is recommended as it has admin privileges)
+2. **Copy the private key**
+3. **In MetaMask**:
+   - Click account icon → "Import Account"
+   - Paste the private key
+   - Click "Import"
 
-### 🎉 You're Ready!
+### Step 6: Final Verification & Testing
 
-Your system is now running with:
+#### 6.1 Test the Complete System
 
-- 🌐 **Web App**: [http://localhost:3000](http://localhost:3000)
-- 📊 **Database Admin**: [http://localhost:8080](http://localhost:8080)
-- 🔍 **Health Check**: [http://localhost:3000/api/health](http://localhost:3000/api/health)
+1. **Visit the application**: [http://localhost:3000](http://localhost:3000)
+2. **Connect MetaMask**: Click "Connect Wallet" and select your imported Ganache account
+3. **Verify role detection**: You should see your role (Admin/Issuer/Holder) detected automatically
+4. **Access dashboard**: Visit [http://localhost:3000/dashboard](http://localhost:3000/dashboard)
+
+#### 6.2 Test Certificate Issuance (Admin/Issuer accounts)
+
+1. Go to dashboard → "Issue Certificate" tab
+2. Fill in recipient details and certificate information
+3. Click "Issue Certificate"
+4. Confirm the MetaMask transaction
+5. Verify the certificate appears in the issued certificates list
+
+#### 6.3 Test Activity Monitoring (Admin accounts)
+
+1. Go to dashboard → "Activity" tab
+2. View real-time activity logs with filtering and search capabilities
+3. The Activity Overview panel stays visible while scrolling for easy monitoring
+4. Filter by activity type, search through logs, and view blockchain transaction links
+
+### Step 7: Clean Database (Optional - For Fresh Start)
+
+If you want to start with a completely clean database:
+
+#### 7.1 Backup Current Data (Optional)
+
+```bash
+# Create backup of current database
+docker exec certchain-mysql mysqldump -u root -pmysql --databases certchain > backup_$(date +%Y%m%d).sql
+```
+
+#### 7.2 Clean Database Tables
+
+```bash
+# Clear all data but keep table structure
+docker exec certchain-mysql mysql -u root -pmysql certchain -e "
+SET FOREIGN_KEY_CHECKS = 0;
+TRUNCATE TABLE certificates;
+TRUNCATE TABLE activity_logs;
+TRUNCATE TABLE user_sessions;
+TRUNCATE TABLE users;
+SET FOREIGN_KEY_CHECKS = 1;"
+```
+
+#### 7.3 Clear Browser Storage
+
+1. Visit: [http://localhost:3000/clear-storage.html](http://localhost:3000/clear-storage.html)
+2. Click "Clear Local Storage"
+3. Or manually clear in browser DevTools: Application → Local Storage → Clear All
+
+#### 7.4 Redeploy Smart Contract (Optional)
+
+If you want to start with a fresh smart contract:
+
+```bash
+# Deploy new contract
+npx hardhat run scripts/deploy.js --network ganache
+
+# Update configuration with new contract address
+node scripts/update-contract-address.js 0xYourNewContractAddress
+```
+
+---
+
+## 🎉 **You're Ready!**
+
+Your CertChain system is now fully operational with:
+
+- 🌐 **Web Application**: [http://localhost:3000](http://localhost:3000)
+- 📊 **Database Management**: [http://localhost:8080](http://localhost:8080)
+- 🔍 **System Health**: [http://localhost:3000/api/health](http://localhost:3000/api/health)
 - 🔑 **Admin Access**: First Ganache account has admin privileges
+- 🏭 **Smart Contract**: Deployed and connected to your local blockchain
+- 📈 **Activity Monitoring**: Real-time activity logs with advanced filtering
+
+## 🛠️ **Common Setup Issues & Solutions**
+
+| Issue                              | Symptoms                   | Solution                                             |
+| ---------------------------------- | -------------------------- | ---------------------------------------------------- |
+| **"DEPLOYER_PRIVATE_KEY not set"** | Contract deployment fails  | Add private key from Ganache to `.env.local`         |
+| **"Port 3000 already in use"**     | Application won't start    | Kill existing process: `npx kill-port 3000`          |
+| **"connection ECONNREFUSED"**      | Database connection fails  | Wait 30 seconds for MySQL startup, restart Docker    |
+| **MetaMask "Chain ID mismatch"**   | Transaction failures       | Add Ganache network (Chain ID: 1337) to MetaMask     |
+| **"missing revert data"**          | Certificate issuance fails | Ensure account has ISSUER role or use admin account  |
+| **Empty certificate list**         | No certificates showing    | Check if contract address is correct in `.env.local` |
+| **Activity logs not loading**      | Empty activity log page    | Check MySQL connection and activity_logs table       |
+
+## 📋 **Development Commands Reference**
+
+```bash
+# System Health & Status
+curl http://localhost:3000/api/health          # Check overall system health
+npm run db:test                                # Test database connection
+docker-compose logs webapp                     # View application logs
+
+# Database Management
+docker-compose restart mysql                   # Restart database
+docker exec -it certchain-mysql mysql -u root -pmysql  # Direct database access
+
+# Smart Contract Development
+npx hardhat compile                            # Compile contracts
+npx hardhat test                              # Run contract tests
+npx hardhat run scripts/deploy.js --network ganache  # Deploy contracts
+
+# Docker Management
+docker-compose up -d                          # Start all services
+docker-compose down                           # Stop all services
+docker-compose restart webapp                 # Restart web app only
+```
 
 ---
 
@@ -133,19 +316,30 @@ Your system is now running with:
 - **Real-time role verification** with automatic updates
 - **No passwords** - wallet address is your identity
 
-### 📜 **NFT Certificate System**
+### 📜 **ERC-721 NFT Certificate System**
 
-- **ERC-721 NFT certificates** minted on blockchain
+- **ERC-721 NFT certificates** minted on blockchain with full standards compliance
 - **IPFS storage** for decentralized document hosting
 - **QR code verification** for instant validation
 - **Tamper-proof** records that recipients truly own
+- **Transferable certificates** with ownership tracking
 
-### 📊 **Comprehensive Activity Logging**
+### 📊 **Comprehensive Activity Monitoring**
 
-- **Real-time activity tracking** for all system events
-- **Advanced filtering** by type, user, date range
+- **Real-time activity tracking** for all system events with MySQL backend
+- **Advanced filtering** by activity type with responsive search interface
+- **Sticky Activity Overview** panel that follows while scrolling
 - **Blockchain transaction links** for complete transparency
 - **Audit-ready logs** for compliance and monitoring
+- **Optimized search** with manual trigger to prevent excessive API calls
+
+### 🎨 **Modern User Interface**
+
+- **Responsive design** with Tailwind CSS and shadcn/ui components
+- **Role-based dashboards** with unified interface for all user types
+- **Real-time updates** and smooth user experience
+- **Privacy-compliant** data access (users only see their own certificates)
+- **Public verification** without authentication requirements
 
 ### 🏗️ **Hybrid Architecture**
 
@@ -160,10 +354,11 @@ Your system is now running with:
 
 ```
 ┌────────────────────────────────────┐
-│        FRONTEND (Next.js)          │ ← React UI with Tailwind CSS
+│        FRONTEND (Next.js)          │ ← React UI with Tailwind CSS & shadcn/ui
 │  • MetaMask integration            │
 │  • Real-time role detection        │
 │  • Certificate management UI       │
+│  • Activity monitoring dashboard   │
 └────────────────────────────────────┘
                     ↓
 ┌────────────────────────────────────┐
@@ -171,13 +366,15 @@ Your system is now running with:
 │  • User profiles & preferences     │
 │  • Activity logs & audit trail     │
 │  • Session management              │
+│  • Privacy-compliant data access   │
 └────────────────────────────────────┘
                     ↓
 ┌────────────────────────────────────┐
 │      BLOCKCHAIN (Ethereum)         │ ← Single source of truth
 │  • Smart contract roles (RBAC)     │
-│  • NFT certificates (ERC-721)      │
+│  • ERC-721 NFT certificates        │
 │  • Immutable audit trail           │
+│  • OpenZeppelin security standards │
 └────────────────────────────────────┘
 ```
 
@@ -185,22 +382,29 @@ Your system is now running with:
 
 - ✅ **Security**: Blockchain handles critical auth & certificates
 - ✅ **Performance**: MySQL handles fast queries & analytics
+- ✅ **Privacy**: Proper data isolation between users
 - ✅ **Scalability**: Each layer scales independently
 - ✅ **Cost-Effective**: No expensive blockchain storage for logs
+- ✅ **Standards Compliant**: Full ERC-721 compatibility
 
 ---
 
 ## 👥 **User Roles & Capabilities**
 
-| Role         | Capabilities                                                 | Blockchain Permission |
-| ------------ | ------------------------------------------------------------ | --------------------- |
-| **ADMIN**    | Grant/revoke roles, system management, access all features   | `ADMIN_ROLE`          |
-| **ISSUER**   | Issue certificates, manage own certificates, view activities | `ISSUER_ROLE`         |
-| **HOLDER**   | View owned certificates, download/share certificates         | Default (any wallet)  |
-| **VERIFIER** | Verify certificates, read-only access to verification        | Public access         |
+| Role         | Capabilities                                                     | Blockchain Permission | Dashboard Access                      |
+| ------------ | ---------------------------------------------------------------- | --------------------- | ------------------------------------- |
+| **ADMIN**    | Grant/revoke roles, system management, view all activities       | `ADMIN_ROLE`          | Full dashboard + activity monitoring  |
+| **ISSUER**   | Issue certificates, manage own certificates, view own activities | `ISSUER_ROLE`         | Certificate management + own activity |
+| **HOLDER**   | View owned certificates, download/share certificates             | Default (any wallet)  | Certificate viewing only              |
+| **VERIFIER** | Verify certificates, read-only access to verification            | Public access         | Public verification page              |
 
 **Role Hierarchy:** ADMIN > ISSUER > HOLDER
-**Important:** Verifiers don't need authentication - verification is public and permissionless.
+
+**Important Notes:**
+
+- Verifiers don't need authentication - verification is public and permissionless
+- Privacy is enforced: users only see certificates and activities related to them
+- Activity monitoring shows comprehensive system events for authorized users
 
 ---
 
@@ -212,17 +416,19 @@ Your system is now running with:
 - **Tailwind CSS** - Utility-first styling framework
 - **shadcn/ui** - Beautiful, accessible React components
 - **Ethers.js** - Ethereum blockchain interaction library
+- **Responsive design** - Mobile-first approach with adaptive layouts
 
 ### **Backend & Database**
 
 - **MySQL 8.0** - Relational database for profiles & logs
 - **Next.js API Routes** - Serverless backend functions
 - **Connection pooling** - Optimized database performance
+- **Privacy enforcement** - User-specific data access controls
 
 ### **Blockchain & Web3**
 
 - **Solidity** - Smart contract programming language
-- **OpenZeppelin** - Security-audited contract libraries
+- **OpenZeppelin** - Security-audited contract libraries (ERC-721, AccessControl, Pausable)
 - **Hardhat** - Ethereum development environment
 - **Ganache** - Local blockchain for development
 - **MetaMask** - Web3 wallet integration
@@ -232,6 +438,7 @@ Your system is now running with:
 - **Docker & Docker Compose** - Containerized deployment
 - **IPFS** - Decentralized file storage
 - **Health monitoring** - Built-in system diagnostics
+- **Activity logging** - Comprehensive audit trail system
 
 ---
 
@@ -251,7 +458,7 @@ docker --version  # Any recent version
 ```bash
 # 1. Clone and install
 git clone <your-repo-url>
-cd V2
+cd CertChain
 npm install
 
 # 2. Start database and web app
@@ -431,6 +638,9 @@ NEXT_PUBLIC_CONTRACT_ADDRESS=0x5FbDB2315678afecb367f032d93F642f64180aa3
 NEXT_PUBLIC_CHAIN_ID=1337
 NEXT_PUBLIC_RPC_URL=http://127.0.0.1:7545
 
+# Deployer Configuration (REQUIRED)
+DEPLOYER_PRIVATE_KEY=0xYourPrivateKeyFromGanache
+
 # Application Settings
 NODE_ENV=production
 ```
@@ -438,6 +648,17 @@ NODE_ENV=production
 ---
 
 ## 📜 **Smart Contract Management**
+
+### **ERC-721 Certificate Contract**
+
+The `CertificateNFT.sol` contract implements a full ERC-721 compliant NFT system with:
+
+- **Standards Compliance**: Full ERC-721 and ERC-721Metadata interfaces
+- **Role-based Access**: Admin and Issuer roles with OpenZeppelin AccessControl
+- **Certificate Storage**: On-chain certificate metadata with IPFS integration
+- **Verification System**: Public verification by IPFS hash or token ID
+- **Revocation Capability**: Mark certificates as invalid while preserving NFT ownership
+- **Transfer Control**: Pausable transfers for emergency situations
 
 ### **Contract Deployment**
 
@@ -525,17 +746,27 @@ scripts\deploy.bat --health     # Windows
 }
 ```
 
-### **Activity Logging**
+### **Activity Logging System**
 
-The system automatically logs:
+The system automatically logs comprehensive activities:
 
-- `CERTIFICATE_ISSUED` - NFT certificate minted
+- `CERTIFICATE_ISSUED` - ERC-721 NFT certificate minted
+- `CERTIFICATE_REVOKED` - Certificate marked as invalid
 - `ROLE_GRANTED/REVOKED` - Blockchain role changes
 - `USER_LOGIN/LOGOUT` - Wallet connections
 - `VERIFICATION_PERFORMED` - Certificate verifications
 - `CONTRACT_DEPLOYED` - Smart contract deployments
 
-Access logs via the admin dashboard at `/dashboard` (admin users).
+**Activity Log Features:**
+
+- **Real-time MySQL storage** for fast queries
+- **Advanced filtering** by activity type
+- **Search functionality** with manual trigger for performance
+- **Sticky Activity Overview** panel for monitoring
+- **Blockchain transaction links** for transparency
+- **Privacy enforcement** - users see only relevant activities
+
+Access comprehensive activity monitoring via the admin dashboard at `/dashboard` (admin users).
 
 ### **Monitoring Tools**
 
@@ -543,8 +774,9 @@ Access logs via the admin dashboard at `/dashboard` (admin users).
 | ------------------------------------ | ----------------------------- | ---------------------------------------- |
 | `GET /api/health`                    | Overall system status         | `curl http://localhost:3000/api/health`  |
 | `GET /api/db-test`                   | Database connectivity         | `curl http://localhost:3000/api/db-test` |
+| `GET /api/activity/get-logs`         | Activity log retrieval        | Integrated in admin dashboard            |
 | `node scripts/test-db-connection.js` | Detailed database diagnostics | Terminal output with full details        |
-| `/dashboard` (admin users)           | Visual database status        | Admin UI for database monitoring         |
+| `/dashboard` (admin users)           | Visual system monitoring      | Admin UI for comprehensive monitoring    |
 
 ---
 
@@ -558,13 +790,19 @@ Access logs via the admin dashboard at `/dashboard` (admin users).
 
 ### **Blockchain APIs**
 
-- `POST /api/blockchain/issue-certificate` - Issue NFT certificate
+- `POST /api/blockchain/issue-certificate` - Issue ERC-721 NFT certificate
 - `GET /api/blockchain/verify-certificate` - Verify certificate by hash/ID
+
+### **Certificate APIs**
+
+- `GET /api/certificates/holder/[walletAddress]` - Get certificates for holder
+- `GET /api/certificates/issuer/[walletAddress]` - Get certificates issued by issuer
+- `GET /api/certificates/verify/[hash]` - Public certificate verification
 
 ### **Activity APIs**
 
 - `POST /api/activity/log` - Log system activities
-- `GET /api/activity/get-logs` - Retrieve activity logs (with filtering)
+- `GET /api/activity/get-logs` - Retrieve activity logs (with filtering and search)
 
 ### **Admin APIs**
 
@@ -589,6 +827,9 @@ Access logs via the admin dashboard at `/dashboard` (admin users).
 | **MetaMask not connecting**      | Wallet connection fails                 | Add Ganache network (Chain ID: 1337, RPC: 127.0.0.1:7545) |
 | **Certificate issuance fails**   | "missing revert data" error             | Import Ganache account with ISSUER role to MetaMask       |
 | **Database connection failed**   | MySQL errors in logs                    | Wait 30 seconds for MySQL to start, check Docker logs     |
+| **DEPLOYER_PRIVATE_KEY missing** | Contract deployment fails               | Add Ganache private key to `.env.local`                   |
+| **Activity logs not loading**    | Empty activity dashboard                | Check MySQL connection and activity_logs table exists     |
+| **Privacy issues**               | Seeing other users' certificates        | Verify wallet address filtering in API endpoints          |
 
 ### **Diagnostic Commands**
 
@@ -605,6 +846,9 @@ npm run db:test
 # Check blockchain connection
 # Ensure Ganache GUI is running on port 7545
 
+# Test activity logging system
+curl http://localhost:3000/api/activity/get-logs
+
 # Reset everything if needed
 docker-compose down -v
 scripts\deploy.bat              # Windows
@@ -618,6 +862,7 @@ scripts\deploy.bat              # Windows
 3. **Test database**: `npm run db:test`
 4. **Verify Ganache**: Ensure GUI is running on port 7545
 5. **Check contract address**: Verify in `.env.local` matches deployed contract
+6. **Test activity system**: Access admin dashboard activity tab
 
 ---
 
@@ -627,12 +872,17 @@ scripts\deploy.bat              # Windows
 CertChain/
 ├── 📁 components/              # React UI components
 │   ├── ui/                    # shadcn/ui component library
+│   ├── dashboard/             # Dashboard components for each role
+│   │   ├── AdminDashboard.js   # Admin interface with activity monitoring
+│   │   ├── IssuerDashboard.js  # Certificate issuance interface
+│   │   └── HolderDashboard.js  # Certificate viewing interface
+│   ├── ActivityLogViewer.js   # Activity monitoring component
 │   ├── Navbar.js              # Navigation component
 │   └── ConnectButton.js       # Wallet connection
 ├── 📁 contexts/               # React context providers
 │   └── AuthContext.js         # Authentication state management
 ├── 📁 contracts/              # Smart contract source code
-│   └── CertificateNFT.sol     # Main certificate NFT contract
+│   └── CertificateNFT.sol     # Main ERC-721 certificate NFT contract
 ├── 📁 lib/                    # Core utility libraries
 │   ├── auth-client.js         # Client-side auth utilities
 │   ├── auth-server.js         # Server-side auth utilities
@@ -640,9 +890,14 @@ CertChain/
 ├── 📁 pages/                  # Next.js pages & API routes
 │   ├── api/                   # Backend API endpoints
 │   │   ├── activity/          # Activity logging APIs
+│   │   │   └── get-logs.js    # MySQL-backed activity retrieval
 │   │   ├── admin/            # Admin management APIs
 │   │   ├── auth/             # Authentication APIs
 │   │   ├── blockchain/       # Blockchain interaction APIs
+│   │   ├── certificates/     # Certificate management APIs
+│   │   │   ├── holder/       # Holder-specific certificate APIs
+│   │   │   ├── issuer/       # Issuer-specific certificate APIs
+│   │   │   └── verify/       # Public verification APIs
 │   │   └── health.js         # System health check endpoint
 │   ├── dashboard.js          # Unified dashboard (all user types)
 │   ├── index.js              # Landing page
@@ -656,8 +911,12 @@ CertChain/
 │   ├── grant-issuer-role.js  # Role management utility
 │   ├── debug-roles.js        # Role debugging utility
 │   └── FINAL_database_setup.sql # Complete database schema
+├── 📁 test/                   # Smart contract tests
+│   └── CertificateNFT.test.js # Comprehensive ERC-721 tests
 ├── 📁 utils/                  # Helper utilities
-│   └── mysql.js              # Database helper functions
+│   ├── mysql.js              # Database helper functions
+│   ├── activityLogger.js     # Activity logging utilities
+│   └── contract.js           # Smart contract interaction utilities
 ├── 📄 docker-compose.yml     # Container orchestration
 ├── 📄 Dockerfile             # Next.js application container
 ├── 📄 hardhat.config.js      # Blockchain development config
@@ -687,6 +946,7 @@ NEXT_PUBLIC_CONTRACT_ADDRESS=0x...your-deployed-contract
 - Update MySQL connection settings in `.env.local`
 - Enable SSL/TLS connections
 - Set up automated backups
+- Configure proper indexing for activity_logs table
 
 ### **3. Infrastructure**
 
@@ -694,6 +954,7 @@ NEXT_PUBLIC_CONTRACT_ADDRESS=0x...your-deployed-contract
 - Set up domain and SSL certificates
 - Configure load balancing for high availability
 - Set up monitoring and alerting
+- Configure IPFS gateway or use dedicated service
 
 ### **4. Security Checklist**
 
@@ -701,8 +962,10 @@ NEXT_PUBLIC_CONTRACT_ADDRESS=0x...your-deployed-contract
 - ✅ Enable HTTPS only (disable HTTP)
 - ✅ Set up proper CORS policies
 - ✅ Regular security audits of smart contracts
-- ✅ Database access restrictions
+- ✅ Database access restrictions with proper user permissions
 - ✅ Rate limiting on API endpoints
+- ✅ Input validation and sanitization
+- ✅ Private key management for contract deployment
 
 ---
 
@@ -721,10 +984,12 @@ We welcome contributions! Here's how to get started:
 ### **Development Standards**
 
 - Follow existing code style and patterns
-- Add tests for new functionality
+- Add tests for new functionality (especially smart contract changes)
 - Update documentation for any API changes
 - Ensure Docker deployment still works
 - Test with fresh database setup
+- Verify ERC-721 compliance for contract changes
+- Test activity logging for new features
 
 ---
 
@@ -736,11 +1001,12 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 🙏 **Acknowledgments**
 
-- [**OpenZeppelin**](https://openzeppelin.com/) - Smart contract security standards
+- [**OpenZeppelin**](https://openzeppelin.com/) - Smart contract security standards and ERC-721 implementation
 - [**Hardhat**](https://hardhat.org/) - Ethereum development environment
 - [**Next.js**](https://nextjs.org/) - React production framework
 - [**Tailwind CSS**](https://tailwindcss.com/) - Utility-first CSS framework
 - [**shadcn/ui**](https://ui.shadcn.com/) - Beautiful React components
+- [**Ethers.js**](https://docs.ethers.org/) - Ethereum interaction library
 
 ---
 
@@ -748,10 +1014,13 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 **Built with ❤️ for the blockchain community**
 
-🚀 **Ready to deploy?** Run `scripts\deploy.bat` (Windows) or `./scripts/deploy.sh` (Linux/Mac) and get started in 10 minutes!
+🚀 **Ready to deploy?** Follow the complete setup guide above and get started in 15 minutes!
 
 [![Deploy](https://img.shields.io/badge/Deploy-Now-success.svg)](.)
-[![Docs](https://img.shields.io/badge/Docs-Complete-blue.svg)](.)
+[![ERC721](https://img.shields.io/badge/Standard-ERC721-blue.svg)](.)
 [![Docker](https://img.shields.io/badge/Docker-Ready-blue.svg)](.)
+[![MySQL](https://img.shields.io/badge/Database-MySQL-orange.svg)](.)
+
+**🏆 Features**: ERC-721 NFT Certificates • Role-Based Access • Activity Monitoring • Privacy Compliant • Docker Ready
 
 </div>

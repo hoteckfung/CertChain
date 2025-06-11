@@ -14,7 +14,7 @@ import {
 import { isResultUserRejection } from "../../utils/errorHandling";
 import Button from "../Button";
 
-export default function IssuerDashboard({ activeTab }) {
+export default function IssuerDashboard({ activeTab, user }) {
   // Notification state
   const {
     notification,
@@ -273,6 +273,41 @@ export default function IssuerDashboard({ activeTab }) {
         "✅ DEBUG: Certificate issued successfully with tokenId:",
         result.tokenId
       );
+
+      // Save certificate to database
+      try {
+        const dbSaveResponse = await fetch("/api/certificates/create", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            tokenId: result.tokenId,
+            ipfsHash: ipfsHash,
+            issuerWallet: walletAddress, // Current user's wallet
+            holderWallet: holderAddress,
+            title: certificateName,
+            description: `Certificate: ${certificateName}`,
+            transactionHash: result.transactionHash,
+            blockNumber: result.blockNumber,
+          }),
+        });
+
+        if (!dbSaveResponse.ok) {
+          const dbError = await dbSaveResponse.json();
+          console.warn("⚠️ Failed to save certificate to database:", dbError);
+          showWarning(
+            "Certificate issued on blockchain but failed to save to database"
+          );
+        } else {
+          console.log("✅ Certificate saved to database successfully");
+        }
+      } catch (dbError) {
+        console.warn("⚠️ Database save error:", dbError);
+        showWarning(
+          "Certificate issued on blockchain but failed to save to database"
+        );
+      }
 
       const newCertificate = {
         id: `cert-${result.tokenId}`,
@@ -798,9 +833,55 @@ export default function IssuerDashboard({ activeTab }) {
           );
           return [...prevCerts, ...newCerts];
         });
+
+        // Migrate localStorage certificates to database if user wallet is available
+        if (user?.walletAddress) {
+          migrateLocalStorageCertificates(
+            storedCertificates,
+            user.walletAddress
+          );
+        }
       }
     }
-  }, []);
+  }, [user?.walletAddress]);
+
+  // Function to migrate localStorage certificates to database
+  const migrateLocalStorageCertificates = async (
+    certificates,
+    issuerWallet
+  ) => {
+    try {
+      console.log(
+        "🔄 Attempting to migrate localStorage certificates to database..."
+      );
+
+      const response = await fetch("/api/certificates/migrate-localStorage", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          certificates,
+          issuerWallet,
+        }),
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        console.log("✅ Certificate migration result:", result);
+
+        if (result.summary.migrated > 0) {
+          showSuccess(
+            `Migrated ${result.summary.migrated} certificates to database`
+          );
+        }
+      } else {
+        console.warn("⚠️ Certificate migration failed:", await response.text());
+      }
+    } catch (error) {
+      console.warn("⚠️ Certificate migration error:", error);
+    }
+  };
 
   // Handle certificate revocation
   const handleRevokeCertificate = async (certificate) => {
