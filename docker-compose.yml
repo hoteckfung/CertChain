@@ -28,8 +28,8 @@ services:
       args:
         NEXT_PUBLIC_RPC_URL: http://host.docker.internal:7545
         NEXT_PUBLIC_CHAIN_ID: 1337
-        NEXT_PUBLIC_CONTRACT_ADDRESS: 0x87A67d7af64C3827f9a6F01e77B77714EE627EE0
-        DEPLOYER_ADDRESS: 0x241dBc6d5f283964536A94e33E2323B7580CE45A
+        NEXT_PUBLIC_CONTRACT_ADDRESS: 0xa1cD4d6B641cAAD0731Ce557491380Ffda7d113d
+        DEPLOYER_ADDRESS: 0x284F56870A9be9377E2150D6504A63c93f58Bfa4
     container_name: certchain-app
     restart: unless-stopped
     ports:
@@ -45,7 +45,7 @@ services:
       - NEXT_PUBLIC_RPC_URL=http://host.docker.internal:7545
       # Copy other blockchain settings from .env.local
       - NEXT_PUBLIC_CHAIN_ID=1337
-      - NEXT_PUBLIC_CONTRACT_ADDRESS=0x87A67d7af64C3827f9a6F01e77B77714EE627EE0
+      - NEXT_PUBLIC_CONTRACT_ADDRESS=0xa1cD4d6B641cAAD0731Ce557491380Ffda7d113d
     depends_on:
       - mysql
     networks:
