@@ -1,10 +1,10 @@
 import mysql from "../../../utils/mysql";
-import { authenticateUser, hasRole, ROLES } from "../../../lib/auth-server";
+import { authenticateUser } from "../../../lib/auth-server";
 import { checkUserRoles } from "../../../utils/contract";
 
 export default async function handler(req, res) {
   try {
-    // Authenticate user and check admin role
+    // Authenticate user first
     const { user, error } = await authenticateUser(req);
 
     if (!user) {
@@ -13,8 +13,26 @@ export default async function handler(req, res) {
         .json({ error: error || "Authentication required" });
     }
 
-    if (!hasRole(user, ROLES.ADMIN)) {
-      return res.status(403).json({ error: "Admin access required" });
+    // Check blockchain admin role instead of database role
+    const {
+      success: roleCheckSuccess,
+      isAdmin,
+      error: roleError,
+    } = await checkUserRoles(user.wallet_address);
+
+    if (!roleCheckSuccess) {
+      console.error("Failed to check blockchain roles:", roleError);
+      return res.status(500).json({
+        error: "Failed to verify admin status",
+        details: roleError,
+      });
+    }
+
+    if (!isAdmin) {
+      return res.status(403).json({
+        error:
+          "Admin access required. Only blockchain admin can access this endpoint.",
+      });
     }
 
     if (req.method === "GET") {
@@ -38,24 +56,17 @@ export default async function handler(req, res) {
               dbUser.wallet_address
             );
 
-            // Determine blockchain role (hierarchy: admin > issuer > holder)
-            let blockchainRole = "holder"; // Default
-            if (isAdmin) {
-              blockchainRole = "admin";
-            } else if (isIssuer) {
-              blockchainRole = "issuer";
-            }
-
             return {
               id: dbUser.id,
               wallet_address: dbUser.wallet_address,
-              role: dbUser.role,
+              role: dbUser.role, // Database role for reference
               blockchainRole: {
-                isAdmin: isAdmin,
-                isIssuer: isIssuer,
+                isAdmin: success ? isAdmin : false,
+                isIssuer: success ? isIssuer : false,
               },
               last_active: dbUser.last_active,
               created_at: dbUser.created_at,
+              roles_verified: success,
             };
           } catch (blockchainError) {
             console.warn(
@@ -64,17 +75,17 @@ export default async function handler(req, res) {
             );
 
             return {
-              ...dbUser,
-              database_role: dbUser.role,
-              blockchain_roles: {
-                is_admin: false,
-                is_issuer: false,
-                is_holder: true,
-                primary_role: "holder", // Default on error
-                roles_verified: false,
-                error: blockchainError.message,
+              id: dbUser.id,
+              wallet_address: dbUser.wallet_address,
+              role: dbUser.role,
+              blockchainRole: {
+                isAdmin: false,
+                isIssuer: false,
               },
-              role_mismatch: false, // Can't determine if there's error
+              last_active: dbUser.last_active,
+              created_at: dbUser.created_at,
+              roles_verified: false,
+              error: blockchainError.message,
             };
           }
         })
@@ -97,19 +108,16 @@ export default async function handler(req, res) {
         summary: {
           total: usersWithBlockchainRoles.length,
           admins: usersWithBlockchainRoles.filter(
-            (u) => u.blockchain_roles.primary_role === "admin"
+            (u) => u.blockchainRole.isAdmin
           ).length,
           issuers: usersWithBlockchainRoles.filter(
-            (u) => u.blockchain_roles.primary_role === "issuer"
+            (u) => u.blockchainRole.isIssuer && !u.blockchainRole.isAdmin
           ).length,
           holders: usersWithBlockchainRoles.filter(
-            (u) => u.blockchain_roles.primary_role === "holder"
-          ).length,
-          role_mismatches: usersWithBlockchainRoles.filter(
-            (u) => u.role_mismatch
+            (u) => !u.blockchainRole.isAdmin && !u.blockchainRole.isIssuer
           ).length,
           verification_errors: usersWithBlockchainRoles.filter(
-            (u) => !u.blockchain_roles.roles_verified
+            (u) => !u.roles_verified
           ).length,
         },
         notes: {

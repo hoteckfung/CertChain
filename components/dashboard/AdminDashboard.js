@@ -60,7 +60,7 @@ function AdminDashboard({ activeTab }) {
             {/* Sidebar */}
             <div className="md:col-span-1">
               {/* Activity Stats */}
-              <div className="bg-white rounded-lg shadow-sm p-6">
+              <div className="bg-white rounded-lg shadow-sm p-6 sticky top-4">
                 <h2 className="text-xl font-semibold mb-4">
                   Activity Overview
                 </h2>

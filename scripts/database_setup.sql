@@ -1,7 +1,7 @@
 -- ============================================================================
--- CERTCHAIN DATABASE SETUP - FINAL VERSION
+-- CERTCHAIN DATABASE SETUP - CLEAN VERSION (NO SAMPLE DATA)
 -- ============================================================================
--- This is the ONLY SQL file you need to run to set up your admin dashboard
+-- This creates empty tables for testing real data insertion from the website
 -- Execute this in phpMyAdmin or MySQL command line
 -- ============================================================================
 CREATE DATABASE IF NOT EXISTS certchain;
@@ -24,7 +24,7 @@ SET FOREIGN_KEY_CHECKS = 1;
 CREATE TABLE users (
     id INT AUTO_INCREMENT PRIMARY KEY,
     wallet_address VARCHAR(42) NOT NULL UNIQUE,
-    role ENUM('admin', 'issuer', 'holder') NOT NULL DEFAULT 'holder',
+    role ENUM('issuer', 'holder') NOT NULL DEFAULT 'holder',
     permissions JSON NULL,
     is_active BOOLEAN DEFAULT TRUE,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -138,7 +138,7 @@ CREATE TABLE user_sessions (
     INDEX idx_is_active (is_active)
 );
 -- ============================================================================
--- 6. ADMIN DASHBOARD VIEWS
+-- 5. ADMIN DASHBOARD VIEWS
 -- ============================================================================
 -- View: User Overview with Certificate Counts and Session Info
 CREATE VIEW admin_user_overview AS
@@ -215,210 +215,16 @@ FROM certificates c
     )
 ORDER BY c.issue_date DESC;
 -- ============================================================================
--- 7. SAMPLE DATA FOR TESTING
--- ============================================================================
--- Admin user (your wallet)
-INSERT INTO users (
-        wallet_address,
-        role,
-        permissions,
-        created_at,
-        last_active
-    )
-VALUES (
-        '0x241dBc6d5f283964536A94e33E2323B7580CE45A',
-        'admin',
-        JSON_ARRAY(
-            'manage_users',
-            'issue_certificates',
-            'verify_certificates',
-            'view_analytics',
-            'manage_system'
-        ),
-        NOW(),
-        NOW()
-    );
--- Sample issuer
-INSERT INTO users (
-        wallet_address,
-        role,
-        permissions,
-        created_at,
-        last_active
-    )
-VALUES (
-        '0x6ae5FfE48c1395260cF096134E5e32725c24080a',
-        'issuer',
-        JSON_ARRAY('issue_certificates', 'verify_certificates'),
-        NOW() - INTERVAL 1 DAY,
-        NOW() - INTERVAL 6 HOUR
-    );
--- Sample holders
-INSERT INTO users (
-        wallet_address,
-        role,
-        permissions,
-        created_at,
-        last_active
-    )
-VALUES (
-        '0x01178ee99F7E50957Ab591b0C7ca307E593254C9',
-        'holder',
-        JSON_ARRAY('view_certificates'),
-        NOW() - INTERVAL 2 DAY,
-        NOW() - INTERVAL 1 HOUR
-    ),
-    (
-        '0x34d2dEe2E2D0754974890d44D0864a9326823C78',
-        'holder',
-        JSON_ARRAY('view_certificates'),
-        NOW() - INTERVAL 3 DAY,
-        NOW() - INTERVAL 3 HOUR
-    );
--- Sample certificates
-INSERT INTO certificates (
-        token_id,
-        ipfs_hash,
-        issuer_id,
-        holder_id,
-        issuer_wallet,
-        holder_wallet,
-        title,
-        description,
-        issue_date,
-        status,
-        transaction_hash,
-        block_number
-    )
-VALUES (
-        '1',
-        'QmSampleHash123456789',
-        2,
-        3,
-        '0x6ae5FfE48c1395260cF096134E5e32725c24080a',
-        '0x01178ee99F7E50957Ab591b0C7ca307E593254C9',
-        'Blockchain Development Certificate',
-        'Certificate of completion for blockchain development course',
-        NOW() - INTERVAL 2 DAY,
-        'issued',
-        '0xsampletransactionhash123456789',
-        12345
-    ),
-    (
-        '2',
-        'QmAnotherHash987654321',
-        2,
-        4,
-        '0x6ae5FfE48c1395260cF096134E5e32725c24080a',
-        '0x34d2dEe2E2D0754974890d44D0864a9326823C78',
-        'Smart Contract Security Certificate',
-        'Advanced certificate in smart contract security practices',
-        NOW() - INTERVAL 1 DAY,
-        'issued',
-        '0xanothertransactionhash987654321',
-        12346
-    );
--- Sample sessions
-INSERT INTO user_sessions (
-        user_id,
-        session_token,
-        wallet_address,
-        login_time,
-        last_activity
-    )
-VALUES (
-        1,
-        UUID(),
-        '0x241dbc6d5f283964536a94e33e2323b7580ce45a',
-        NOW() - INTERVAL 2 HOUR,
-        NOW() - INTERVAL 30 MINUTE
-    ),
-    (
-        2,
-        UUID(),
-        '0x6ae5FfE48c1395260cF096134E5e32725c24080a',
-        NOW() - INTERVAL 1 DAY,
-        NOW() - INTERVAL 6 HOUR
-    ),
-    (
-        3,
-        UUID(),
-        '0x01178ee99F7E50957Ab591b0C7ca307E593254C9',
-        NOW() - INTERVAL 3 HOUR,
-        NOW() - INTERVAL 1 HOUR
-    );
--- Sample activity logs
-INSERT INTO activity_logs (
-        user_id,
-        action,
-        entity_type,
-        entity_id,
-        details,
-        wallet_address,
-        target_wallet_address,
-        certificate_id,
-        token_id,
-        transaction_hash,
-        block_number,
-        category,
-        created_at
-    )
-VALUES (
-        2,
-        'certificate_issued',
-        'certificate',
-        '1',
-        'Certificate issued to holder for blockchain development course completion',
-        '0x6ae5FfE48c1395260cF096134E5e32725c24080a',
-        '0x01178ee99F7E50957Ab591b0C7ca307E593254C9',
-        1,
-        '1',
-        '0xsampletransactionhash123456789',
-        12345,
-        'certificate_management',
-        NOW() - INTERVAL 2 DAY
-    ),
-    (
-        2,
-        'certificate_issued',
-        'certificate',
-        '2',
-        'Certificate issued to holder for smart contract security course completion',
-        '0x6ae5FfE48c1395260cF096134E5e32725c24080a',
-        '0x34d2dEe2E2D0754974890d44D0864a9326823C78',
-        2,
-        '2',
-        '0xanothertransactionhash987654321',
-        12346,
-        'certificate_management',
-        NOW() - INTERVAL 1 DAY
-    ),
-    (
-        1,
-        'user_login',
-        'session',
-        '1',
-        'Admin user logged in via MetaMask',
-        '0x241dbc6d5f283964536a94e33e2323b7580ce45a',
-        NULL,
-        NULL,
-        NULL,
-        NULL,
-        NULL,
-        'authentication',
-        NOW() - INTERVAL 2 HOUR
-    );
--- ============================================================================
--- 8. PERFORMANCE INDEXES
+-- 6. PERFORMANCE INDEXES
 -- ============================================================================
 CREATE INDEX idx_user_role_active ON users(role, is_active);
 CREATE INDEX idx_activity_user_date ON activity_logs(user_id, created_at);
 CREATE INDEX idx_certificates_status_date ON certificates(status, created_at);
 CREATE INDEX idx_sessions_user_active ON user_sessions(user_id, is_active);
 -- ============================================================================
--- 9. VERIFICATION
+-- 7. VERIFICATION
 -- ============================================================================
-SELECT 'Database setup complete!' as status;
+SELECT 'Clean database setup complete!' as status;
 SELECT COUNT(*) as total_users
 FROM users;
 SELECT COUNT(*) as total_certificates
@@ -428,3 +234,12 @@ FROM activity_logs;
 SELECT COUNT(*) as total_sessions
 FROM user_sessions;
 SELECT 'Admin dashboard views created successfully!' as views_status;
+-- ============================================================================
+-- 8. READY FOR TESTING
+-- ============================================================================
+-- Tables are now empty and ready to test real data insertion from your website:
+-- ✅ User auto-detection when connecting wallets
+-- ✅ Certificate issuance from blockchain
+-- ✅ Activity logging from user actions
+-- ✅ Session tracking from login/logout
+-- ============================================================================

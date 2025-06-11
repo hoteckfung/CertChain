@@ -48,8 +48,14 @@ const Footer = () => {
           <FooterColumn
             title="Resources"
             links={[
-              { label: "About Us", href: "#" },
-              { label: "Contact Us", href: "#" },
+              {
+                label: "About Us",
+                href: "https://github.com/hoteckfung/CertChain",
+              },
+              {
+                label: "Contact Us",
+                href: "mailto:hoteckfung@gmail.com",
+              },
               { label: "Help Center", href: "#" },
               { label: "FAQ", href: "#" },
             ]}
@@ -89,7 +95,7 @@ const Footer = () => {
               </svg>
             </a>
             <a
-              href="#"
+              href="https://www.linkedin.com/in/teck-fung-ho-4b8231246/"
               aria-label="LinkedIn"
               className="text-gray-500 hover:text-primary-blue">
               <svg
@@ -107,7 +113,7 @@ const Footer = () => {
               </svg>
             </a>
             <a
-              href="#"
+              href="https://github.com/hoteckfung/CertChain"
               aria-label="GitHub"
               className="text-gray-500 hover:text-primary-blue">
               <svg

@@ -6,98 +6,52 @@ export default async function handler(req, res) {
   }
 
   try {
-    const {
-      page = 1,
-      limit = 50,
-      type,
-      walletAddress,
-      startDate,
-      endDate,
-      searchTerm,
-    } = req.query;
+    const { page = 1, limit = 20 } = req.query;
 
-    // Build filters for the getActivityLogs function
-    const offset = (parseInt(page) - 1) * parseInt(limit);
+    console.log("Testing basic query...");
 
-    // Use the existing getActivityLogs function from mysql utils
-    const { data: logs, error } = await mysql.getActivityLogs(
-      parseInt(limit),
-      offset,
-      null, // userIdFilter - not used in this context
-      type && type !== "all" ? type : null, // categoryFilter
-      null // actionFilter
+    // Start with the simplest possible query
+    const { data: logs, error: logsError } = await mysql.query(
+      "SELECT * FROM activity_logs ORDER BY created_at DESC LIMIT 10"
     );
 
-    if (error) {
-      throw new Error(`Failed to fetch logs: ${error.message}`);
+    if (logsError) {
+      console.error("Database error:", logsError);
+      return res.status(500).json({
+        error: "Database query failed",
+        details: logsError.message,
+        hint: "Check if activity_logs table exists",
+      });
     }
 
-    // Apply additional filtering that isn't supported by the base function
-    let filteredLogs = logs || [];
+    console.log(`Found ${logs?.length || 0} logs`);
 
-    if (walletAddress) {
-      filteredLogs = filteredLogs.filter(
-        (log) =>
-          log.wallet_address === walletAddress ||
-          log.target_wallet_address === walletAddress
-      );
-    }
+    // Get count without parameters
+    const { data: countData, error: countError } = await mysql.query(
+      "SELECT COUNT(*) as total FROM activity_logs"
+    );
 
-    if (startDate) {
-      filteredLogs = filteredLogs.filter(
-        (log) => new Date(log.created_at) >= new Date(startDate)
-      );
-    }
-
-    if (endDate) {
-      filteredLogs = filteredLogs.filter(
-        (log) => new Date(log.created_at) <= new Date(endDate)
-      );
-    }
-
-    if (searchTerm) {
-      const searchLower = searchTerm.toLowerCase();
-      filteredLogs = filteredLogs.filter(
-        (log) =>
-          (log.details && log.details.toLowerCase().includes(searchLower)) ||
-          (log.wallet_address &&
-            log.wallet_address.toLowerCase().includes(searchLower)) ||
-          (log.target_wallet_address &&
-            log.target_wallet_address.toLowerCase().includes(searchLower))
-      );
-    }
-
-    // Get total count (approximation since we're filtering after query)
-    const totalCount = filteredLogs.length;
+    const totalCount = countData?.[0]?.total || 0;
     const totalPages = Math.ceil(totalCount / parseInt(limit));
 
-    // Handle date conversion safely
-    const processedLogs = filteredLogs.map((log) => {
-      let created_at;
-      if (log.created_at instanceof Date) {
-        created_at = log.created_at.toISOString();
-      } else if (typeof log.created_at === "string") {
-        // Try to parse as date string
-        const dateObj = new Date(log.created_at);
-        created_at = isNaN(dateObj.getTime())
-          ? log.created_at
-          : dateObj.toISOString();
-      } else {
-        // Handle invalid/missing created_at without corrupting data
-        console.warn(
-          `Invalid created_at format for log ${log.id}:`,
-          typeof log.created_at,
-          log.created_at
-        );
-        // Keep original value or set to null to indicate invalid data
-        created_at = log.created_at || null;
-      }
-
-      return {
-        ...log,
-        created_at,
-      };
-    });
+    // Process logs
+    const processedLogs = (logs || []).map((log) => ({
+      id: log.id,
+      type: log.action,
+      action: log.action,
+      details: log.details,
+      wallet_address: log.wallet_address,
+      target_address: log.target_wallet_address,
+      transaction_hash: log.transaction_hash,
+      token_id: log.token_id,
+      block_number: log.block_number,
+      created_at:
+        log.created_at instanceof Date
+          ? log.created_at.toISOString()
+          : log.created_at,
+      category: log.category,
+      ipfs_hash: log.ipfs_hash,
+    }));
 
     res.status(200).json({
       success: true,
@@ -109,12 +63,17 @@ export default async function handler(req, res) {
         hasNextPage: parseInt(page) < totalPages,
         hasPrevPage: parseInt(page) > 1,
       },
+      debug: {
+        tableExists: true,
+        totalRecords: totalCount,
+      },
     });
   } catch (error) {
     console.error("Error fetching activity logs:", error);
     res.status(500).json({
       error: "Failed to fetch activity logs",
       details: error.message,
+      hint: "Check database connection and table structure",
     });
   }
 }

@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Clear Storage - CertChain</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 600px;
+            margin: 100px auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+
+        .container {
+            background: white;
+            padding: 40px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            text-align: center;
+        }
+
+        .success {
+            color: #28a745;
+            font-size: 18px;
+            margin: 20px 0;
+        }
+
+        .warning {
+            color: #dc3545;
+            font-size: 14px;
+            background: #ffeaa7;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 20px 0;
+        }
+
+        .next-steps {
+            text-align: left;
+            background: #e3f2fd;
+            padding: 20px;
+            border-radius: 5px;
+            margin: 20px 0;
+        }
+
+        .button {
+            background: #007bff;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            text-decoration: none;
+            display: inline-block;
+            margin: 10px;
+        }
+
+        .button:hover {
+            background: #0056b3;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h1>🧹 CertChain Storage Cleanup</h1>
+
+        <div class="warning">
+            <strong>⚠️ Warning:</strong> This will clear all locally stored certificate data and user sessions.
+        </div>
+
+        <div id="status"></div>
+
+        <button class="button" onclick="clearStorage()">Clear Local Storage</button>
+
+        <div class="next-steps">
+            <h3>Next Steps After Clearing:</h3>
+            <ol>
+                <li><strong>Deploy your new smart contract</strong></li>
+                <li><strong>Update contract address</strong> in <code>.env.local</code></li>
+                <li><strong>Restart the development server</strong></li>
+                <li><strong>Connect your wallet</strong> to get assigned roles</li>
+                <li><strong>Start issuing certificates</strong> with the new contract</li>
+            </ol>
+        </div>
+
+        <a href="/" class="button">Return to Dashboard</a>
+    </div>
+
+    <script>
+        function clearStorage() {
+            try {
+                // Clear localStorage
+                localStorage.clear();
+
+                // Clear sessionStorage
+                sessionStorage.clear();
+
+                // Clear indexedDB (if any)
+                if ('indexedDB' in window) {
+                    indexedDB.databases().then(databases => {
+                        databases.forEach(db => {
+                            indexedDB.deleteDatabase(db.name);
+                        });
+                    }).catch(err => console.log('IndexedDB cleanup failed:', err));
+                }
+
+                document.getElementById('status').innerHTML = `
+                    <div class="success">
+                        ✅ Local storage cleared successfully!<br>
+                        <small>localStorage, sessionStorage, and any cached data have been removed.</small>
+                    </div>
+                `;
+
+                console.log('✅ Storage cleanup completed');
+
+            } catch (error) {
+                document.getElementById('status').innerHTML = `
+                    <div style="color: red;">
+                        ❌ Error clearing storage: ${error.message}
+                    </div>
+                `;
+                console.error('Storage cleanup failed:', error);
+            }
+        }
+
+        // Auto-run cleanup if ?auto=true parameter is present
+        if (new URLSearchParams(window.location.search).get('auto') === 'true') {
+            clearStorage();
+        }
+    </script>
+</body>
+
+</html>

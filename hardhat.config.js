@@ -1,5 +1,5 @@
 require("@nomicfoundation/hardhat-toolbox");
-require("dotenv").config();
+require("dotenv").config({ path: ".env.local" });
 
 /** @type import('hardhat/config').HardhatUserConfig */
 module.exports = {
@@ -23,13 +23,17 @@ module.exports = {
     ganache: {
       url: "http://127.0.0.1:7545",
       chainId: 1337,
-      accounts: process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : [],
+      accounts: process.env.DEPLOYER_PRIVATE_KEY
+        ? [process.env.DEPLOYER_PRIVATE_KEY]
+        : [],
     },
     sepolia: {
       url:
         process.env.SEPOLIA_RPC_URL ||
         "https://sepolia.infura.io/v3/YOUR-PROJECT-ID",
-      accounts: process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : [],
+      accounts: process.env.DEPLOYER_PRIVATE_KEY
+        ? [process.env.DEPLOYER_PRIVATE_KEY]
+        : [],
       chainId: 11155111,
     },
   },

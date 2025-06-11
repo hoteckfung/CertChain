@@ -39,6 +39,8 @@ import {
   Search,
   RefreshCw,
   ExternalLink,
+  Clock,
+  Users,
 } from "lucide-react";
 
 const UserRoleManager = () => {
@@ -52,19 +54,6 @@ const UserRoleManager = () => {
   const [updatingAddress, setUpdatingAddress] = useState(null);
   const [lastUpdated, setLastUpdated] = useState(null);
 
-  // Hardcoded addresses for demonstration - in production you might get these from database or other sources
-  const knownAddresses = [
-    {
-      address: "0x241dBc6d5f283964536A94e33E2323B7580CE45A",
-    },
-    {
-      address: "0x6ae5ffe48c1395260cf096134e5e32725c24080a",
-    },
-    {
-      address: "0x01178ee99F7E50957Ab591b0C7ca307E593254C9",
-    },
-  ];
-
   // Load users and their blockchain roles
   useEffect(() => {
     loadUsersWithRoles();
@@ -75,42 +64,51 @@ const UserRoleManager = () => {
     setError("");
 
     try {
-      const usersWithRoles = [];
+      // Fetch all users from database instead of using hardcoded addresses
+      const response = await fetch("/api/admin/users-with-blockchain-roles");
+      const result = await response.json();
 
-      for (const knownUser of knownAddresses) {
-        try {
-          const { success, isAdmin, isIssuer } = await checkUserRoles(
-            knownUser.address
-          );
-
-          if (success) {
-            // Determine primary role
-            let role = "holder";
-            if (isAdmin) role = "admin";
-            else if (isIssuer) role = "issuer";
-
-            usersWithRoles.push({
-              id: knownUser.address,
-              wallet_address: knownUser.address,
-              role: role,
-              isAdmin,
-              isIssuer,
-              last_active: new Date().toISOString(),
-            });
-          }
-        } catch (err) {
-          console.error(`Error checking roles for ${knownUser.address}:`, err);
-        }
+      if (!response.ok) {
+        throw new Error(result.error || "Failed to fetch users");
       }
 
-      setUsers(usersWithRoles);
+      if (result.success && result.users) {
+        // Transform the data to match our component's expected format
+        const formattedUsers = result.users.map((user) => ({
+          id: user.wallet_address,
+          wallet_address: user.wallet_address,
+          role: determineDisplayRole(user.blockchainRole),
+          isAdmin: user.blockchainRole?.isAdmin || false,
+          isIssuer: user.blockchainRole?.isIssuer || false,
+          last_active: user.last_active,
+          created_at: user.created_at,
+        }));
+
+        setUsers(formattedUsers);
+        console.log(`📊 Loaded ${formattedUsers.length} users from database`);
+      } else {
+        throw new Error("Invalid response format");
+      }
+
       setLastUpdated(new Date());
     } catch (err) {
       console.error("Failed to load users with roles:", err);
-      setError("Failed to load blockchain roles: " + err.message);
+      setError("Failed to load users: " + err.message);
+
+      // Fallback to empty array on error
+      setUsers([]);
     } finally {
       setLoading(false);
     }
+  };
+
+  // Helper function to determine display role from blockchain roles
+  const determineDisplayRole = (blockchainRole) => {
+    if (!blockchainRole) return "holder";
+
+    if (blockchainRole.isAdmin) return "admin";
+    if (blockchainRole.isIssuer) return "issuer";
+    return "holder";
   };
 
   const handleBlockchainRoleChange = async (walletAddress, newRole) => {
@@ -216,6 +214,17 @@ const UserRoleManager = () => {
           </Alert>
         )}
 
+        {/* Admin Role Information */}
+        <Alert className="mb-4 bg-blue-50 text-blue-800 border-blue-200">
+          <Users className="h-4 w-4 text-blue-600" />
+          <AlertDescription className="text-blue-700">
+            <strong>Admin Role:</strong> Admin status is determined by the
+            blockchain smart contract (deployer address). Database only stores
+            'issuer' and 'holder' roles. Admin permissions are automatically
+            granted to the contract deployer.
+          </AlertDescription>
+        </Alert>
+
         <div className="flex flex-col sm:flex-row gap-4 mb-4">
           <div className="flex-1">
             <div className="relative">
@@ -251,6 +260,32 @@ const UserRoleManager = () => {
             Refresh
           </Button>
         </div>
+
+        {lastUpdated && (
+          <div className="flex items-center text-sm text-gray-500 mb-4">
+            <Clock className="h-4 w-4 mr-1" />
+            Last updated: {lastUpdated.toLocaleString()}
+            {users.length === 0 && (
+              <span className="ml-2 text-blue-600">
+                • Connect new wallets to see them appear here automatically
+              </span>
+            )}
+          </div>
+        )}
+
+        {users.length === 0 && !loading && (
+          <Alert className="mb-4 bg-blue-50 text-blue-800 border-blue-200">
+            <Users className="h-4 w-4 text-blue-600" />
+            <AlertDescription className="text-blue-700">
+              <strong>No users found.</strong>
+              <br />
+              • New wallet connections will automatically appear here
+              <br />
+              • Connect with MetaMask to add your wallet to the system
+              <br />• The deployer address will automatically get admin role
+            </AlertDescription>
+          </Alert>
+        )}
 
         {loading ? (
           <div className="flex justify-center items-center py-8">

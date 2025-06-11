@@ -6,105 +6,279 @@
 
 A modern, **blockchain-first certificate issuance and verification platform** built with Next.js, Smart Contracts, and MySQL. Issue tamper-proof NFT certificates with secure role-based access control.
 
-## 🚀 **Quick Start - Get Running in 10 Minutes**
+## 🚀 **Quick Start - Complete Setup Guide**
 
-Get CertChain running with a simple 4-step process!
+Get CertChain running from scratch with this comprehensive guide!
 
 ### Prerequisites
 
 - **Node.js** (v16 or higher) - [Download here](https://nodejs.org)
 - **Docker Desktop** - [Download here](https://docker.com/products/docker-desktop)
 - **Git** - [Download here](https://git-scm.com)
+- **MetaMask Browser Extension** - [Install here](https://metamask.io)
 
-### Step 1: Clone & Install Dependencies
+### Step 1: Clone Repository & Install Dependencies
 
 ```bash
 git clone https://github.com/hoteckfung/CertChain.git
-
+cd CertChain
 npm install
 ```
 
-### Step 2: Deploy Web Application & Database
+### Step 2: Environment Configuration
+
+#### 2.1 Create Environment File
+
+```bash
+# Copy the example environment file
+cp .env.example .env.local
+
+# Or create manually with these required variables:
+```
+
+Create `.env.local` in the project root with the following content:
+
+```env
+# Database Configuration (auto-configured by Docker)
+MYSQL_HOST=mysql
+MYSQL_PORT=3306
+MYSQL_USER=certchain_user
+MYSQL_PASSWORD=certchain_password
+MYSQL_DATABASE=certchain
+
+# Blockchain Configuration
+# These will be updated after you deploy your smart contract
+NEXT_PUBLIC_CONTRACT_ADDRESS=
+NEXT_PUBLIC_CHAIN_ID=1337
+NEXT_PUBLIC_RPC_URL=http://127.0.0.1:7545
+
+# Deployer Configuration (REQUIRED for smart contract deployment)
+# Get this from Ganache GUI - click the key icon next to any account
+DEPLOYER_PRIVATE_KEY=
+
+# Application Settings
+NODE_ENV=development
+```
+
+#### 2.2 Set Up Deployer Private Key
+
+**⚠️ Important: You need a deployer private key to deploy smart contracts**
+
+**Use Ganache Account (Recommended for Development)**
+
+1. Start Ganache GUI (see Step 4.1 below for detailed instructions)
+2. Click the 🔑 icon next to the first account
+3. Copy the private key
+4. Add it to `.env.local`:
+   ```env
+   DEPLOYER_PRIVATE_KEY=0xYourGanachePrivateKeyHere
+   ```
+
+### Step 3: Database Setup
+
+#### 3.1 Start Database & Web Application
 
 ```bash
 # Windows users
 scripts\deploy.bat
 
 # Linux/Mac users
+chmod +x scripts/deploy.sh
 ./scripts/deploy.sh
 
 # Or manually with Docker
 docker-compose up -d
 ```
 
-**This automatically sets up:**
+#### 3.2 Verify Database Health
 
-- ✅ MySQL database with schema and sample data
-- ✅ Next.js web application
-- ✅ phpMyAdmin for database management
-- ✅ Health monitoring endpoints
+```bash
+# Check if everything is running
+curl http://localhost:3000/api/health
 
-### Step 3: Set Up Blockchain (Ganache + Smart Contract)
+# You should see:
+# {"status":"healthy","database":"connected","timestamp":"..."}
+```
 
-#### 3.1 Install and Configure Ganache
+**Access Points After Database Setup:**
+
+- 🌐 **Web App**: [http://localhost:3000](http://localhost:3000)
+- 📊 **Database Admin**: [http://localhost:8080](http://localhost:8080) (user: `certchain_user`, password: `certchain_password`)
+
+### Step 4: Blockchain Setup
+
+#### 4.1 Install and Configure Ganache
 
 1. **Download Ganache GUI**: Visit [https://trufflesuite.com/ganache/](https://trufflesuite.com/ganache/)
 2. **Install and open** the application
 3. **Create workspace**:
+
    - Click **"QUICKSTART"** (recommended) - auto-configures everything correctly
    - OR create **"NEW WORKSPACE"** with these settings:
      - Server: `HTTP://127.0.0.1:7545`
      - Chain ID: `1337`
+     - Network ID: `1337`
 
-#### 3.2 Deploy Smart Contract
+4. **Verify Ganache is running**: You should see 10 accounts with 100 ETH each
+
+#### 4.2 Deploy Smart Contract
 
 ```bash
-# Deploy the certificate NFT contract
+# Compile and deploy the certificate NFT contract
+npx hardhat compile
 npx hardhat run scripts/deploy.js --network ganache
 ```
 
-**Copy the contract address from the output**, then update your configuration:
+**Important**: Copy the contract address from the deploy output!
+
+Example output:
+
+```
+CertificateNFT deployed to: 0x5FbDB2315678afecb367f032d93F642f64180aa3
+```
+
+#### 4.3 Update Configuration with Contract Address
 
 ```bash
 # Update environment files with your new contract address
 node scripts/update-contract-address.js 0xYourNewContractAddress
 ```
 
-This automatically:
+This script automatically:
 
 - ✅ Updates `.env.local`
 - ✅ Updates `docker-compose.yml`
 - ✅ Rebuilds Docker container
 - ✅ Restarts the application
 
-### Step 4: Configure MetaMask & Test
+### Step 5: MetaMask Configuration
 
-1. **Add Ganache network to MetaMask**:
+#### 5.1 Add Ganache Network to MetaMask
 
-   - Network Name: `Ganache Local`
-   - RPC URL: `http://127.0.0.1:7545`
-   - Chain ID: `1337`
-   - Currency: `ETH`
+In MetaMask:
 
-2. **Import test account**:
+1. Click network dropdown (usually shows "Ethereum Mainnet")
+2. Click "Add Network" → "Add a network manually"
+3. Enter these details:
+   - **Network Name**: `Ganache Local`
+   - **New RPC URL**: `http://127.0.0.1:7545`
+   - **Chain ID**: `1337`
+   - **Currency Symbol**: `ETH`
+   - **Block Explorer URL**: (leave empty)
 
-   - In Ganache GUI: Click 🔑 next to any account
-   - Copy the private key
-   - In MetaMask: Import Account → Paste private key
+#### 5.2 Import Test Account
 
-3. **Test the system**:
-   - Visit: [http://localhost:3000](http://localhost:3000)
-   - Connect wallet and verify role detection
-   - Access admin dashboard: [http://localhost:3000/dashboard](http://localhost:3000/dashboard) (admin users)
+1. **In Ganache GUI**: Click 🔑 next to any account (first account is recommended as it has admin privileges)
+2. **Copy the private key**
+3. **In MetaMask**:
+   - Click account icon → "Import Account"
+   - Paste the private key
+   - Click "Import"
 
-### 🎉 You're Ready!
+### Step 6: Final Verification & Testing
 
-Your system is now running with:
+#### 6.1 Test the Complete System
 
-- 🌐 **Web App**: [http://localhost:3000](http://localhost:3000)
-- 📊 **Database Admin**: [http://localhost:8080](http://localhost:8080)
-- 🔍 **Health Check**: [http://localhost:3000/api/health](http://localhost:3000/api/health)
+1. **Visit the application**: [http://localhost:3000](http://localhost:3000)
+2. **Connect MetaMask**: Click "Connect Wallet" and select your imported Ganache account
+3. **Verify role detection**: You should see your role (Admin/Issuer/Holder) detected automatically
+4. **Access dashboard**: Visit [http://localhost:3000/dashboard](http://localhost:3000/dashboard)
+
+#### 6.2 Test Certificate Issuance (Admin/Issuer accounts)
+
+1. Go to dashboard → "Issue Certificate" tab
+2. Fill in recipient details and certificate information
+3. Click "Issue Certificate"
+4. Confirm the MetaMask transaction
+5. Verify the certificate appears in the issued certificates list
+
+### Step 7: Clean Database (Optional - For Fresh Start)
+
+If you want to start with a completely clean database:
+
+#### 7.1 Backup Current Data (Optional)
+
+```bash
+# Create backup of current database
+docker exec certchain-mysql mysqldump -u root -pmysql --databases certchain > backup_$(date +%Y%m%d).sql
+```
+
+#### 7.2 Clean Database Tables
+
+```bash
+# Clear all data but keep table structure
+docker exec certchain-mysql mysql -u root -pmysql certchain -e "
+SET FOREIGN_KEY_CHECKS = 0;
+TRUNCATE TABLE certificates;
+TRUNCATE TABLE activity_logs;
+TRUNCATE TABLE user_sessions;
+TRUNCATE TABLE users;
+SET FOREIGN_KEY_CHECKS = 1;"
+```
+
+#### 7.3 Clear Browser Storage
+
+1. Visit: [http://localhost:3000/clear-storage.html](http://localhost:3000/clear-storage.html)
+2. Click "Clear Local Storage"
+3. Or manually clear in browser DevTools: Application → Local Storage → Clear All
+
+#### 7.4 Redeploy Smart Contract (Optional)
+
+If you want to start with a fresh smart contract:
+
+```bash
+# Deploy new contract
+npx hardhat run scripts/deploy.js --network ganache
+
+# Update configuration with new contract address
+node scripts/update-contract-address.js 0xYourNewContractAddress
+```
+
+---
+
+## 🎉 **You're Ready!**
+
+Your CertChain system is now fully operational with:
+
+- 🌐 **Web Application**: [http://localhost:3000](http://localhost:3000)
+- 📊 **Database Management**: [http://localhost:8080](http://localhost:8080)
+- 🔍 **System Health**: [http://localhost:3000/api/health](http://localhost:3000/api/health)
 - 🔑 **Admin Access**: First Ganache account has admin privileges
+- 🏭 **Smart Contract**: Deployed and connected to your local blockchain
+
+## 🛠️ **Common Setup Issues & Solutions**
+
+| Issue                              | Symptoms                   | Solution                                             |
+| ---------------------------------- | -------------------------- | ---------------------------------------------------- |
+| **"DEPLOYER_PRIVATE_KEY not set"** | Contract deployment fails  | Add private key from Ganache to `.env.local`         |
+| **"Port 3000 already in use"**     | Application won't start    | Kill existing process: `npx kill-port 3000`          |
+| **"connection ECONNREFUSED"**      | Database connection fails  | Wait 30 seconds for MySQL startup, restart Docker    |
+| **MetaMask "Chain ID mismatch"**   | Transaction failures       | Add Ganache network (Chain ID: 1337) to MetaMask     |
+| **"missing revert data"**          | Certificate issuance fails | Ensure account has ISSUER role or use admin account  |
+| **Empty certificate list**         | No certificates showing    | Check if contract address is correct in `.env.local` |
+
+## 📋 **Development Commands Reference**
+
+```bash
+# System Health & Status
+curl http://localhost:3000/api/health          # Check overall system health
+npm run db:test                                # Test database connection
+docker-compose logs webapp                     # View application logs
+
+# Database Management
+docker-compose restart mysql                   # Restart database
+docker exec -it certchain-mysql mysql -u root -pmysql  # Direct database access
+
+# Smart Contract Development
+npx hardhat compile                            # Compile contracts
+npx hardhat test                              # Run contract tests
+npx hardhat run scripts/deploy.js --network ganache  # Deploy contracts
+
+# Docker Management
+docker-compose up -d                          # Start all services
+docker-compose down                           # Stop all services
+docker-compose restart webapp                 # Restart web app only
+```
 
 ---
 
@@ -200,6 +374,7 @@ Your system is now running with:
 | **VERIFIER** | Verify certificates, read-only access to verification        | Public access         |
 
 **Role Hierarchy:** ADMIN > ISSUER > HOLDER
+
 **Important:** Verifiers don't need authentication - verification is public and permissionless.
 
 ---
@@ -251,7 +426,7 @@ docker --version  # Any recent version
 ```bash
 # 1. Clone and install
 git clone <your-repo-url>
-cd V2
+cd CertChain
 npm install
 
 # 2. Start database and web app
@@ -431,6 +606,9 @@ NEXT_PUBLIC_CONTRACT_ADDRESS=0x5FbDB2315678afecb367f032d93F642f64180aa3
 NEXT_PUBLIC_CHAIN_ID=1337
 NEXT_PUBLIC_RPC_URL=http://127.0.0.1:7545
 
+# Deployer Configuration (REQUIRED)
+DEPLOYER_PRIVATE_KEY=0xYourPrivateKeyFromGanache
+
 # Application Settings
 NODE_ENV=production
 ```
@@ -589,6 +767,7 @@ Access logs via the admin dashboard at `/dashboard` (admin users).
 | **MetaMask not connecting**      | Wallet connection fails                 | Add Ganache network (Chain ID: 1337, RPC: 127.0.0.1:7545) |
 | **Certificate issuance fails**   | "missing revert data" error             | Import Ganache account with ISSUER role to MetaMask       |
 | **Database connection failed**   | MySQL errors in logs                    | Wait 30 seconds for MySQL to start, check Docker logs     |
+| **DEPLOYER_PRIVATE_KEY missing** | Contract deployment fails               | Add Ganache private key to `.env.local`                   |
 
 ### **Diagnostic Commands**
 
@@ -748,7 +927,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 **Built with ❤️ for the blockchain community**
 
-🚀 **Ready to deploy?** Run `scripts\deploy.bat` (Windows) or `./scripts/deploy.sh` (Linux/Mac) and get started in 10 minutes!
+🚀 **Ready to deploy?** Follow the complete setup guide above and get started in 15 minutes!
 
 [![Deploy](https://img.shields.io/badge/Deploy-Now-success.svg)](.)
 [![Docs](https://img.shields.io/badge/Docs-Complete-blue.svg)](.)

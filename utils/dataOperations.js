@@ -1,87 +1,40 @@
 // Utility functions for data operations (mock implementation)
 
 /**
- * Get certificates for the current holder
- * @returns {Promise<Array>} Array of certificate objects
+ * Get certificates for a specific holder by wallet address
+ * @param {string} walletAddress - The wallet address of the holder
+ * @returns {Promise<Array>} Array of certificate objects for the specific holder
  */
-export async function getHolderCertificates() {
-  // In a real app, this would fetch from an API or blockchain
-
-  // Get certificates issued via the issuer interface
-  let issuedCertificates = [];
-  if (typeof window !== "undefined") {
-    const storedCertificates = JSON.parse(
-      localStorage.getItem("issuedCertificates") || "[]"
-    );
-    issuedCertificates = storedCertificates;
+export async function getHolderCertificates(walletAddress) {
+  if (!walletAddress) {
+    throw new Error("Wallet address is required to fetch certificates");
   }
 
-  const mockCertificates = [
-    {
-      id: "cert-001",
-      title: "Advanced Blockchain Development",
-      issuer: "Blockchain Academy",
-      type: "Certificate of Completion",
-      status: "issued",
-      issueDate: "2023-05-15",
-      expiryDate: "2025-05-15",
-      hash: "QmXS2LfM4sg39AbjxHKiWQB9PsZgUKaBmtEP764e7CDer5",
-      description:
-        "This certificate verifies completion of the Advanced Blockchain Development course.",
-    },
-    {
-      id: "cert-002",
-      title: "Smart Contract Security",
-      issuer: "Web3 Security Institute",
-      type: "Professional Certification",
-      status: "issued",
-      issueDate: "2023-08-22",
-      hash: "QmYA7p467t4BGgBL4NmyHtsXMoPrYH9b3kSG6dbgFYskJm",
-      description:
-        "Certification in identifying and mitigating security vulnerabilities in smart contracts.",
-    },
-    {
-      id: "cert-003",
-      title: "Decentralized Application Architecture",
-      issuer: "DApp University",
-      type: "Course Certificate",
-      status: "revoked",
-      issueDate: "2023-11-10",
-      hash: "QmZZrTyPX2EZzCZrQAQoYyHEEz3Unsd8zcAHbKHCR4LMCJ",
-      description: "This certificate has been revoked by the issuer.",
-    },
-    {
-      id: "cert-004",
-      title: "Blockchain for Business",
-      issuer: "Enterprise Blockchain Consortium",
-      type: "Professional Certificate",
-      status: "issued",
-      issueDate: "2023-03-05",
-      expiryDate: "2026-03-05",
-      hash: "QmPK1s3pNYLi9ERiq3BDxKa4XosgWwFRQUydHUtz4YgpqB",
-      description:
-        "Professional certification for implementing blockchain solutions in enterprise environments.",
-    },
-  ];
+  try {
+    // Fetch certificates from the database via API
+    const response = await fetch(`/api/certificates/holder/${walletAddress}`);
 
-  // Simulate network delay
-  await new Promise((resolve) => setTimeout(resolve, 600));
+    if (!response.ok) {
+      if (response.status === 404) {
+        // No certificates found for this holder
+        return [];
+      }
+      throw new Error(`Failed to fetch certificates: ${response.status}`);
+    }
 
-  // Combine issued certificates with mock certificates
-  // Convert issuer certificate format to holder certificate format
-  const convertedIssuedCerts = issuedCertificates.map((cert) => ({
-    id: cert.id,
-    title: cert.title,
-    issuer: cert.institution || "Unknown Institution",
-    type: cert.type,
-    status: cert.status,
-    issueDate: cert.issueDate,
-    hash: cert.hash,
-    description: cert.details || `Certificate for ${cert.title}`,
-  }));
+    const data = await response.json();
 
-  // Return combined certificates (issued ones first, then mock ones)
-  return [...convertedIssuedCerts, ...mockCertificates];
+    if (!data.success) {
+      throw new Error(data.error || "Failed to fetch certificates");
+    }
+
+    return data.certificates || [];
+  } catch (error) {
+    console.error("Error fetching holder certificates:", error);
+
+    // Return empty array instead of mock data to prevent showing other users' certificates
+    return [];
+  }
 }
 
 /**
@@ -90,26 +43,70 @@ export async function getHolderCertificates() {
  * @returns {Promise<Object|null>} Certificate object or null if not found
  */
 export async function getVerifierCertificate(hash) {
-  // In a real app, this would query the blockchain or API
-  const certificates = await getHolderCertificates();
-  return certificates.find((cert) => cert.hash === hash) || null;
+  if (!hash) {
+    throw new Error("IPFS hash is required for verification");
+  }
+
+  try {
+    // For verification, we can search all certificates by hash via API
+    const response = await fetch(`/api/certificates/verify/${hash}`);
+
+    if (!response.ok) {
+      if (response.status === 404) {
+        // Certificate not found
+        return null;
+      }
+      throw new Error(`Failed to verify certificate: ${response.status}`);
+    }
+
+    const data = await response.json();
+
+    if (!data.success) {
+      throw new Error(data.error || "Failed to verify certificate");
+    }
+
+    return data.certificate || null;
+  } catch (error) {
+    console.error("Error verifying certificate:", error);
+    return null;
+  }
 }
 
 /**
- * Get certificates issued by the current issuer
- * @returns {Promise<Array>} Array of certificate objects
+ * Get certificates issued by a specific issuer by wallet address
+ * @param {string} walletAddress - The wallet address of the issuer
+ * @returns {Promise<Array>} Array of certificate objects issued by the specific issuer
  */
-export async function getIssuerCertificates() {
-  // Similar to holder certificates but with different status options
-  const holderCerts = await getHolderCertificates();
+export async function getIssuerCertificates(walletAddress) {
+  if (!walletAddress) {
+    throw new Error("Wallet address is required to fetch certificates");
+  }
 
-  // Modify the certificates to represent issuer's view
-  return holderCerts.map((cert) => ({
-    ...cert,
-    recipient: "0xD8f24D419153E5D03d614c5155f900f4B5C8A65a",
-    recipientName: "John Doe",
-    status: cert.status, // Keep original status (already 'issued' or 'revoked')
-  }));
+  try {
+    // Fetch certificates from the database via API
+    const response = await fetch(`/api/certificates/issuer/${walletAddress}`);
+
+    if (!response.ok) {
+      if (response.status === 404) {
+        // No certificates found for this issuer
+        return [];
+      }
+      throw new Error(`Failed to fetch certificates: ${response.status}`);
+    }
+
+    const data = await response.json();
+
+    if (!data.success) {
+      throw new Error(data.error || "Failed to fetch certificates");
+    }
+
+    return data.certificates || [];
+  } catch (error) {
+    console.error("Error fetching issuer certificates:", error);
+
+    // Return empty array instead of mock data to prevent showing other issuers' certificates
+    return [];
+  }
 }
 
 export default {

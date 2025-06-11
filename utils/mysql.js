@@ -178,29 +178,27 @@ export async function getActivityLogs(
   actionFilter = null
 ) {
   let sql = `
-    SELECT al.*, u.role 
-    FROM activity_logs al
-    LEFT JOIN users u ON al.user_id = u.id
+    SELECT * FROM activity_logs
     WHERE 1=1
   `;
   let params = [];
 
   if (userIdFilter) {
-    sql += " AND al.user_id = ?";
+    sql += " AND user_id = ?";
     params.push(userIdFilter);
   }
 
   if (categoryFilter) {
-    sql += " AND al.category = ?";
+    sql += " AND category = ?";
     params.push(categoryFilter);
   }
 
   if (actionFilter) {
-    sql += " AND al.action = ?";
+    sql += " AND action = ?";
     params.push(actionFilter);
   }
 
-  sql += " ORDER BY al.created_at DESC LIMIT ? OFFSET ?";
+  sql += " ORDER BY created_at DESC LIMIT ? OFFSET ?";
   params.push(limit, offset);
 
   const { data, error } = await query(sql, params);

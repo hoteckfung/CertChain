@@ -82,15 +82,37 @@ const VerifyPage = () => {
 
       if (code) {
         // Successfully scanned QR code
-        setCertificateHash(code.data);
+        let hashToVerify = code.data;
+
+        // Check if the QR code contains a URL with hash parameter
+        try {
+          const url = new URL(code.data);
+          const hashParam = url.searchParams.get("hash");
+          if (hashParam) {
+            hashToVerify = hashParam;
+          }
+        } catch (e) {
+          // Not a valid URL, assume it's a direct hash
+          // Keep the original data
+        }
+
+        setCertificateHash(hashToVerify);
         setIsScanning(false);
+        showInfo(
+          `QR code scanned successfully! Found hash: ${hashToVerify.substring(
+            0,
+            20
+          )}...`
+        );
         // Automatically verify after scanning
-        verifyHash(code.data);
+        verifyHash(hashToVerify);
       } else {
         setScanError(
-          "No QR code found in the image. Please try another image."
+          "No QR code found in the image. Please ensure the image contains a clear QR code and try again."
         );
-        showError("No QR code found in the image. Please try another image.");
+        showError(
+          "No QR code found in the image. Please ensure the image contains a clear QR code and try again."
+        );
         setIsScanning(false);
       }
     };
@@ -129,6 +151,10 @@ const VerifyPage = () => {
         );
         if (blockchainResponse.ok) {
           blockchainVerification = await blockchainResponse.json();
+          console.log(
+            "🔍 DEBUG: Blockchain verification result:",
+            blockchainVerification
+          );
         }
       } catch (blockchainError) {
         console.warn("Blockchain verification failed:", blockchainError);
@@ -190,6 +216,7 @@ const VerifyPage = () => {
           blockchainVerified: blockchainVerification?.exists || false,
           isRevoked: verificationStatus === "revoked",
           isJsonCert,
+          blockchainData: blockchainVerification,
           certificate: isJsonCert
             ? {
                 id: certificateData.id || hash,
@@ -203,11 +230,23 @@ const VerifyPage = () => {
                   certificateData.recipient ||
                   certificateData.recipientName ||
                   "Unknown Recipient",
-                issuedDate:
-                  blockchainVerification?.certificate?.issueDate ||
-                  certificateData.issuedOn ||
-                  certificateData.issuanceDate ||
-                  new Date().toISOString().split("T")[0],
+                issuedDate: (() => {
+                  const rawDate =
+                    blockchainVerification?.certificate?.issueDate ||
+                    certificateData.issuedOn ||
+                    certificateData.issuanceDate ||
+                    new Date().toISOString().split("T")[0];
+
+                  // Format the date properly
+                  if (rawDate.includes("T")) {
+                    return new Date(rawDate).toLocaleDateString("en-US", {
+                      year: "numeric",
+                      month: "long",
+                      day: "numeric",
+                    });
+                  }
+                  return rawDate;
+                })(),
                 course:
                   blockchainVerification?.certificate?.certificateType ||
                   certificateData.title ||
@@ -225,9 +264,21 @@ const VerifyPage = () => {
                 issuedTo:
                   blockchainVerification?.certificate?.recipientName ||
                   "Certificate Holder",
-                issuedDate:
-                  blockchainVerification?.certificate?.issueDate ||
-                  new Date().toISOString().split("T")[0],
+                issuedDate: (() => {
+                  const rawDate =
+                    blockchainVerification?.certificate?.issueDate ||
+                    new Date().toISOString().split("T")[0];
+
+                  // Format the date properly
+                  if (rawDate.includes("T")) {
+                    return new Date(rawDate).toLocaleDateString("en-US", {
+                      year: "numeric",
+                      month: "long",
+                      day: "numeric",
+                    });
+                  }
+                  return rawDate;
+                })(),
                 course:
                   blockchainVerification?.certificate?.certificateType ||
                   "Certificate",
@@ -237,6 +288,24 @@ const VerifyPage = () => {
           fileUrl: ipfsUrl,
           hash: hash,
         });
+
+        // Log the verification activity
+        try {
+          await fetch("/api/activity/log", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              type: "VERIFICATION_PERFORMED",
+              walletAddress: "anonymous",
+              details: `Certificate verification: ${verificationMessage}`,
+              ipfsHash: hash,
+            }),
+          });
+        } catch (logError) {
+          console.warn("Failed to log verification activity:", logError);
+        }
 
         if (verificationStatus === "valid") {
           showSuccess(verificationMessage);
@@ -269,6 +338,21 @@ const VerifyPage = () => {
   const handleQrUpload = (e) => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
+
+      // Validate file type
+      if (!file.type.startsWith("image/")) {
+        showError("Please select a valid image file (PNG, JPG, etc.)");
+        return;
+      }
+
+      // Check file size (max 10MB)
+      if (file.size > 10 * 1024 * 1024) {
+        showError(
+          "Image file is too large. Please select a file smaller than 10MB."
+        );
+        return;
+      }
+
       const reader = new FileReader();
 
       reader.onload = (e) => {
@@ -277,28 +361,61 @@ const VerifyPage = () => {
         processQrCode(imageUrl);
       };
 
+      reader.onerror = () => {
+        showError("Failed to read the image file. Please try again.");
+      };
+
       reader.readAsDataURL(file);
     }
   };
 
-  // Handle drag and drop functionality
+  // Handle drag and drop functionality with visual feedback
+  const [isDragOver, setIsDragOver] = useState(false);
+
   const handleDragOver = (e) => {
     e.preventDefault();
     e.stopPropagation();
+    setIsDragOver(true);
+  };
+
+  const handleDragLeave = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragOver(false);
   };
 
   const handleDrop = (e) => {
     e.preventDefault();
     e.stopPropagation();
+    setIsDragOver(false);
 
     if (e.dataTransfer.files && e.dataTransfer.files[0]) {
       const file = e.dataTransfer.files[0];
+
+      // Validate file type
+      if (!file.type.startsWith("image/")) {
+        showError("Please select a valid image file (PNG, JPG, etc.)");
+        return;
+      }
+
+      // Check file size (max 10MB)
+      if (file.size > 10 * 1024 * 1024) {
+        showError(
+          "Image file is too large. Please select a file smaller than 10MB."
+        );
+        return;
+      }
+
       const reader = new FileReader();
 
       reader.onload = (e) => {
         const imageUrl = e.target.result;
         setQrImage(imageUrl);
         processQrCode(imageUrl);
+      };
+
+      reader.onerror = () => {
+        showError("Failed to read the image file. Please try again.");
       };
 
       reader.readAsDataURL(file);
@@ -324,13 +441,13 @@ const VerifyPage = () => {
 
         <Navbar />
 
-        <main className="flex-grow py-12 px-4">
-          <div className="container mx-auto max-w-4xl">
-            <div className="text-center mb-10">
-              <h1 className="text-3xl font-bold mb-4">
+        <main className="flex-grow container mx-auto px-4 py-8 max-w-7xl">
+          <div className="max-w-4xl mx-auto">
+            <div className="text-center mb-8">
+              <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900 mb-4 break-words">
                 Certificate Verification
               </h1>
-              <p className="text-gray-600 max-w-2xl mx-auto">
+              <p className="text-lg sm:text-xl text-gray-600 max-w-2xl mx-auto break-words">
                 Verify the authenticity of any certificate issued through our
                 platform. No account required - our verification system is
                 public and accessible to everyone.
@@ -372,7 +489,7 @@ const VerifyPage = () => {
                           type="text"
                           value={certificateHash}
                           onChange={(e) => setCertificateHash(e.target.value)}
-                          placeholder="Enter certificate hash (IPFS CID)"
+                          placeholder="Enter certificate hash (CID / IPFS hash)"
                           className="w-full"
                         />
                       </div>
@@ -397,8 +514,13 @@ const VerifyPage = () => {
 
                   <TabsContent value="qr">
                     <div
-                      className="border-2 border-dashed rounded-lg p-6 text-center mb-4"
+                      className={`border-2 border-dashed rounded-lg p-6 text-center mb-4 transition-colors ${
+                        isDragOver
+                          ? "border-blue-400 bg-blue-50"
+                          : "border-gray-300 hover:border-gray-400"
+                      }`}
                       onDragOver={handleDragOver}
+                      onDragLeave={handleDragLeave}
                       onDrop={handleDrop}>
                       {qrImage ? (
                         <div className="flex flex-col items-center">
@@ -414,6 +536,8 @@ const VerifyPage = () => {
                               setCertificateHash("");
                               setVerificationResult(null);
                               setVerificationError(null);
+                              setScanError(null);
+                              setIsScanning(false);
                             }}>
                             Upload Different Image
                           </Button>
@@ -422,18 +546,23 @@ const VerifyPage = () => {
                         <div className="flex flex-col items-center">
                           <Upload className="h-12 w-12 text-gray-400 mb-4" />
                           <p className="text-gray-500 mb-4">
-                            Drag and drop a QR code image, or click to upload
+                            Drag and drop a QR code image (PNG, JPG), or click
+                            to upload
                           </p>
-                          <Button as="label" htmlFor="qr-upload">
+                          <label htmlFor="qr-upload" className="cursor-pointer">
                             <input
                               id="qr-upload"
                               type="file"
-                              accept="image/*"
+                              accept="image/png,image/jpeg,image/jpg,image/*"
                               onChange={handleQrUpload}
                               className="hidden"
                             />
-                            Select Image
-                          </Button>
+                            <Button
+                              type="button"
+                              className="pointer-events-none">
+                              Select Image
+                            </Button>
+                          </label>
                         </div>
                       )}
                     </div>
@@ -458,7 +587,7 @@ const VerifyPage = () => {
             {/* Verification Result */}
             {verificationResult && (
               <Card
-                className={`mb-8 ${
+                className={`mb-8 border-2 outline-none focus:outline-none ${
                   verificationResult.isRevoked
                     ? "border-red-500"
                     : verificationResult.isValid
@@ -466,14 +595,14 @@ const VerifyPage = () => {
                     : "border-yellow-500"
                 }`}>
                 <CardHeader
-                  className={
+                  className={`outline-none border-none ${
                     verificationResult.isRevoked
                       ? "bg-red-50"
                       : verificationResult.isValid
                       ? "bg-green-50"
                       : "bg-yellow-50"
-                  }>
-                  <div className="flex items-center">
+                  }`}>
+                  <div className="flex items-center outline-none">
                     {verificationResult.isRevoked ? (
                       <>
                         <svg
@@ -537,23 +666,6 @@ const VerifyPage = () => {
                           : "bg-green-100 border border-green-200"
                       }`}>
                       <div className="flex items-center">
-                        <svg
-                          xmlns="http://www.w3.org/2000/svg"
-                          className={`h-5 w-5 mr-2 ${
-                            verificationResult.isRevoked
-                              ? "text-red-600"
-                              : "text-green-600"
-                          }`}
-                          fill="none"
-                          viewBox="0 0 24 24"
-                          stroke="currentColor">
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={2}
-                            d="M9 12l2 2 4-4m5.6-1.6L21 8l-5.6-3.6a1.1 1.1 0 00-1.2 0L9 8l5.6 4a1.1 1.1 0 001.2 0z"
-                          />
-                        </svg>
                         <span
                           className={`text-sm font-medium ${
                             verificationResult.isRevoked
@@ -568,83 +680,97 @@ const VerifyPage = () => {
                     </div>
                   )}
 
-                  <div className="grid gap-4 md:grid-cols-2">
-                    <div>
-                      <h3 className="font-semibold text-gray-500 mb-1">
-                        Certificate ID
-                      </h3>
-                      <p className="mb-4">
-                        {verificationResult.certificate.id}
-                      </p>
+                  <div className="grid gap-6 md:grid-cols-2">
+                    <div className="space-y-4">
+                      <div>
+                        <h3 className="text-sm font-medium text-gray-500 mb-1">
+                          Certificate ID
+                        </h3>
+                        <p className="text-sm font-mono break-all bg-gray-50 p-2 rounded">
+                          {verificationResult.hash}
+                        </p>
+                      </div>
 
-                      {verificationResult.certificate.tokenId && (
-                        <>
-                          <h3 className="font-semibold text-gray-500 mb-1">
-                            Token ID
-                          </h3>
-                          <p className="mb-4">
-                            {verificationResult.certificate.tokenId}
-                          </p>
-                        </>
-                      )}
+                      <div>
+                        <h3 className="text-sm font-medium text-gray-500 mb-1">
+                          Issue Date
+                        </h3>
+                        <p className="text-sm font-medium">
+                          {verificationResult.certificate.issuedDate}
+                        </p>
+                      </div>
 
-                      <h3 className="font-semibold text-gray-500 mb-1">
-                        Issuer
-                      </h3>
-                      <p className="mb-4">
-                        {verificationResult.certificate.issuer}
-                      </p>
-
-                      <h3 className="font-semibold text-gray-500 mb-1">
-                        Issued To
-                      </h3>
-                      <p className="mb-4">
-                        {verificationResult.certificate.issuedTo}
-                      </p>
+                      <div>
+                        <h3 className="text-sm font-medium text-gray-500 mb-1">
+                          Certificate Type
+                        </h3>
+                        <p className="text-sm font-medium">
+                          {verificationResult.certificate.course}
+                        </p>
+                      </div>
                     </div>
-                    <div>
-                      <h3 className="font-semibold text-gray-500 mb-1">
-                        Issue Date
-                      </h3>
-                      <p className="mb-4">
-                        {verificationResult.certificate.issuedDate}
-                      </p>
+                    <div className="space-y-4">
+                      <div>
+                        <h3 className="text-sm font-medium text-gray-500 mb-1">
+                          Issuer
+                        </h3>
+                        {verificationResult.blockchainVerified &&
+                        verificationResult.blockchainData?.certificate
+                          ?.issuer ? (
+                          <p className="text-xs font-mono text-gray-600 break-all">
+                            {
+                              verificationResult.blockchainData.certificate
+                                .issuer
+                            }
+                          </p>
+                        ) : (
+                          <p className="text-sm text-gray-500">Not available</p>
+                        )}
+                      </div>
 
-                      <h3 className="font-semibold text-gray-500 mb-1">
-                        Certificate Type
-                      </h3>
-                      <p className="mb-4">
-                        {verificationResult.certificate.course}
-                      </p>
+                      <div>
+                        <h3 className="text-sm font-medium text-gray-500 mb-1">
+                          Issued To
+                        </h3>
+                        {verificationResult.blockchainVerified &&
+                        verificationResult.blockchainData?.certificate
+                          ?.recipient ? (
+                          <p className="text-xs font-mono text-gray-600 break-all">
+                            {
+                              verificationResult.blockchainData.certificate
+                                .recipient
+                            }
+                          </p>
+                        ) : (
+                          <p className="text-sm text-gray-500">Not available</p>
+                        )}
+                      </div>
 
-                      <h3 className="font-semibold text-gray-500 mb-1">
-                        Status
-                      </h3>
-                      <p
-                        className={`mb-4 font-medium ${
-                          verificationResult.isRevoked
-                            ? "text-red-600"
-                            : verificationResult.isValid
-                            ? "text-green-600"
-                            : "text-yellow-600"
-                        }`}>
-                        {verificationResult.isRevoked
-                          ? "🚫 REVOKED"
-                          : verificationResult.isValid
-                          ? "✅ VALID"
-                          : "⚠️ UNVERIFIED"}
-                      </p>
-
-                      <h3 className="font-semibold text-gray-500 mb-1">
-                        IPFS Hash
-                      </h3>
-                      <p className="text-sm font-mono break-all mb-4">
-                        {verificationResult.hash}
-                      </p>
+                      <div>
+                        <h3 className="text-sm font-medium text-gray-500 mb-1">
+                          Status
+                        </h3>
+                        <div className="flex items-center">
+                          <span
+                            className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${
+                              verificationResult.isRevoked
+                                ? "bg-red-100 text-red-800"
+                                : verificationResult.isValid
+                                ? "bg-green-100 text-green-800"
+                                : "bg-yellow-100 text-yellow-800"
+                            }`}>
+                            {verificationResult.isRevoked
+                              ? "🚫 REVOKED"
+                              : verificationResult.isValid
+                              ? "✅ VALID"
+                              : "⚠️ UNVERIFIED"}
+                          </span>
+                        </div>
+                      </div>
                     </div>
                   </div>
 
-                  <div className="mt-6">
+                  <div className="mt-6 flex justify-end">
                     <Button onClick={viewCertificateOnIPFS}>
                       View Original Certificate
                     </Button>
