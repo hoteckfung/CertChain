@@ -178,6 +178,11 @@ export function AuthProvider({ children }) {
             if (data.success) {
               userProfile = data.profile;
             }
+          } else {
+            console.warn(
+              "⚠️ Profile fetch failed with status:",
+              response.status
+            );
           }
         } catch (profileError) {
           console.warn(
@@ -216,18 +221,32 @@ export function AuthProvider({ children }) {
           );
         }
 
-        // 4. Update database with latest login (fire and forget)
+        // 4. Update database with latest login (fire and forget - don't block on database errors)
         try {
-          fetch("/api/auth/update-last-login", {
+          const updateResponse = await fetch("/api/auth/login", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               walletAddress: address,
-              role: roleData.primaryRole,
+              userData: { role: roleData.primaryRole },
             }),
             credentials: "include",
-          }).catch(console.warn); // Don't block on database errors
-        } catch {}
+          });
+
+          if (!updateResponse.ok) {
+            console.warn(
+              "⚠️ Failed to create session, but continuing with authentication"
+            );
+          } else {
+            const loginData = await updateResponse.json();
+            if (loginData.success) {
+              console.log("✅ Authentication session created successfully");
+            }
+          }
+        } catch (updateError) {
+          console.warn("⚠️ Could not create session:", updateError.message);
+          // Don't block authentication flow for database errors
+        }
 
         return userData;
       } catch (err) {

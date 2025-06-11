@@ -23,6 +23,9 @@ Get CertChain running from scratch with this comprehensive guide!
 git clone https://github.com/hoteckfung/CertChain.git
 cd CertChain
 npm install
+
+# Install Hardhat for smart contract development
+npm install --save-dev hardhat
 ```
 
 ### Step 2: Environment Configuration

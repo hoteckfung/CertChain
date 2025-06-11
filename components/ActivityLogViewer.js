@@ -341,21 +341,21 @@ export default function ActivityLogViewer() {
           <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
             {/* Activity Type Filter */}
             <div className="md:col-span-3">
-              <Select
-                value={filters.type}
-                onValueChange={(value) => handleFilterChange("type", value)}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Filter by type" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Activities</SelectItem>
-                  {Object.entries(ACTIVITY_TYPES).map(([key, config]) => (
-                    <SelectItem key={key} value={key}>
-                      {config.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+            <Select
+              value={filters.type}
+              onValueChange={(value) => handleFilterChange("type", value)}>
+              <SelectTrigger>
+                <SelectValue placeholder="Filter by type" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Activities</SelectItem>
+                {Object.entries(ACTIVITY_TYPES).map(([key, config]) => (
+                  <SelectItem key={key} value={key}>
+                    {config.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             </div>
 
             {/* Search with manual trigger */}
