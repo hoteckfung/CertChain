@@ -64,6 +64,17 @@ const DashboardPage = () => {
     }
   }, [user?.role, isAdmin, isIssuer, isHolder]);
 
+  // Render dashboard component
+  const renderDashboardComponent = () => {
+    if (isAdmin) {
+      return <AdminDashboard activeTab={activeTab} />;
+    } else if (isIssuer) {
+      return <IssuerDashboard activeTab={activeTab} />;
+    } else {
+      return <HolderDashboard activeTab={activeTab} />;
+    }
+  };
+
   return (
     <div className="flex flex-col min-h-screen">
       <Head>
@@ -142,13 +153,7 @@ const DashboardPage = () => {
         </div>
 
         {/* Role-specific Dashboard Content */}
-        {isAdmin ? (
-          <AdminDashboard activeTab={activeTab} />
-        ) : isIssuer ? (
-          <IssuerDashboard activeTab={activeTab} />
-        ) : (
-          <HolderDashboard activeTab={activeTab} />
-        )}
+        {renderDashboardComponent()}
       </main>
 
       <Footer />

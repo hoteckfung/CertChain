@@ -22,7 +22,7 @@ import {
 } from "recharts";
 import { Database } from "lucide-react";
 
-export default function AdminDashboard({ activeTab }) {
+function AdminDashboard({ activeTab }) {
   // Format timestamp
   const formatTimestamp = (timestamp) => {
     const date = new Date(timestamp);
@@ -135,3 +135,5 @@ export default function AdminDashboard({ activeTab }) {
 
   return <div>{renderTabContent()}</div>;
 }
+
+export default AdminDashboard;
