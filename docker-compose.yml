@@ -26,11 +26,11 @@ services:
       context: .
       dockerfile: Dockerfile
       args:
-        NEXT_PUBLIC_RPC_URL: http://127.0.0.1:7545
-        NEXT_PUBLIC_CHAIN_ID: 1337
-        NEXT_PUBLIC_CONTRACT_ADDRESS: 0xc02ef8eD923b97c3D125D6Ba6aF404f15f20A928
-        DEPLOYER_ADDRESS: 0x531c7797DD5ab550b2dd5f67ece3b3c7626D022f
-        SERVER_RPC_URL: http://host.docker.internal:7545
+        NEXT_PUBLIC_RPC_URL: ${NEXT_PUBLIC_RPC_URL:-http://127.0.0.1:7545}
+        NEXT_PUBLIC_CHAIN_ID: ${NEXT_PUBLIC_CHAIN_ID:-1337}
+        NEXT_PUBLIC_CONTRACT_ADDRESS: ${NEXT_PUBLIC_CONTRACT_ADDRESS:-}
+        DEPLOYER_ADDRESS: ${DEPLOYER_ADDRESS:-}
+        SERVER_RPC_URL: ${SERVER_RPC_URL:-http://host.docker.internal:7545}
     container_name: certchain-app
     restart: unless-stopped
     ports:
@@ -43,12 +43,12 @@ services:
       - MYSQL_PASSWORD=certchain_password
       - MYSQL_DATABASE=certchain
       # RPC URL for browser access (from user's machine)
-      - NEXT_PUBLIC_RPC_URL=http://127.0.0.1:7545
+      - NEXT_PUBLIC_RPC_URL=${NEXT_PUBLIC_RPC_URL:-http://127.0.0.1:7545}
       # RPC URL for server-side API calls (from inside Docker container)
-      - SERVER_RPC_URL=http://host.docker.internal:7545
+      - SERVER_RPC_URL=${SERVER_RPC_URL:-http://host.docker.internal:7545}
       # Copy other blockchain settings from .env.local
-      - NEXT_PUBLIC_CHAIN_ID=1337
-      - NEXT_PUBLIC_CONTRACT_ADDRESS=0xc02ef8eD923b97c3D125D6Ba6aF404f15f20A928
+      - NEXT_PUBLIC_CHAIN_ID=${NEXT_PUBLIC_CHAIN_ID:-1337}
+      - NEXT_PUBLIC_CONTRACT_ADDRESS=${NEXT_PUBLIC_CONTRACT_ADDRESS:-}
     depends_on:
       - mysql
     networks:

@@ -2,7 +2,7 @@ const hre = require("hardhat");
 
 async function main() {
   console.log("🚀 CertChain Smart Contract Deployment");
-  console.log("=====================================");
+  console.log("🔐 ===================================== 🔐");
   console.log("");
 
   try {
@@ -108,13 +108,13 @@ async function main() {
     };
 
     console.log("📊 Deployment Summary:");
-    console.log("======================");
+    console.log("📋 ==================== 📋");
     console.log(JSON.stringify(deploymentInfo, null, 2));
     console.log("");
 
     // Provide next steps
     console.log("🎯 Next Steps:");
-    console.log("==============");
+    console.log("🚀 ============ 🚀");
     console.log("1. 📝 Update your application configuration:");
     console.log(
       `   node scripts/update-contract-address.js ${contractAddress}`
@@ -162,13 +162,13 @@ async function main() {
 
     console.log("");
     console.log("🎉 Deployment completed successfully!");
-    console.log("=====================================");
+    console.log("✨ =================================== ✨");
 
     return certificateNFT;
   } catch (error) {
     console.error("");
     console.error("❌ DEPLOYMENT FAILED!");
-    console.error("=====================");
+    console.error("🛑 =================== 🛑");
     console.error("Error:", error.message);
     console.error("");
     console.error("🔧 Troubleshooting:");
