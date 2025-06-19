@@ -872,42 +872,31 @@ export default function IssuerDashboard({ activeTab, user }) {
     setIsRevoking(true);
 
     try {
-      showInfo(
-        "Revoking certificate on blockchain. Please confirm in MetaMask..."
-      );
+      showInfo("Revoking certificate on blockchain...");
       console.log("Revoking certificate with tokenId:", certificate.tokenId);
 
-      // Use the direct contract function call which will trigger MetaMask
-      const result = await revokeCertificate(certificate.tokenId);
-      console.log("Revocation result:", result);
-
-      if (!result.success) {
-        if (result.userRejected) {
-          showInfo("Transaction was cancelled by user.");
-          setRevokeConfirmModal({ show: false, certificate: null });
-          return;
-        }
-        throw new Error(result.error || "Failed to revoke certificate");
-      }
-
-      // Update in database after successful blockchain transaction
-      const response = await fetch(`/api/certificates/update-status`, {
+      // Use the server-side revocation endpoint
+      const response = await fetch("/api/blockchain/revoke-certificate", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
           tokenId: certificate.tokenId,
-          status: "Revoked",
-          transactionHash: result.transactionHash,
         }),
       });
 
+      const result = await response.json();
+      console.log("Revocation result:", result);
+
       if (!response.ok) {
-        console.warn(
-          "Database update warning: Status update failed in database, but blockchain transaction succeeded"
-        );
+        throw new Error(result.error || "Failed to revoke certificate");
       }
+
+      // Database update is already handled by the server-side revocation endpoint
+      console.log(
+        "Certificate revoked successfully on blockchain and database"
+      );
 
       // Force certificate status update immediately for UI responsiveness
       console.log("Updating certificate status in UI");
