@@ -22,57 +22,29 @@ import {
   Shield,
   Activity,
   Loader2,
+  Ban,
+  AlertOctagon,
 } from "lucide-react";
 
 // Activity type configurations
 const ACTIVITY_TYPES = {
-  CERTIFICATE_ISSUED: {
+  certificate_issued: {
     label: "Certificate Issued",
     icon: FileText,
     color: "bg-green-100 text-green-800",
     description: "New certificate minted on blockchain",
   },
-  CERTIFICATE_REVOKED: {
+  certificate_revoked: {
     label: "Certificate Revoked",
-    icon: FileText,
+    icon: Ban,
     color: "bg-red-100 text-red-800",
     description: "Certificate revoked by issuer",
   },
-  ROLE_GRANTED: {
-    label: "Role Granted",
-    icon: Shield,
-    color: "bg-blue-100 text-blue-800",
-    description: "Blockchain role granted to user",
-  },
-  ROLE_REVOKED: {
-    label: "Role Revoked",
-    icon: Shield,
-    color: "bg-orange-100 text-orange-800",
-    description: "Blockchain role revoked from user",
-  },
-  USER_LOGIN: {
+  user_login: {
     label: "User Login",
     icon: User,
     color: "bg-gray-100 text-gray-800",
     description: "User connected wallet",
-  },
-  USER_LOGOUT: {
-    label: "User Logout",
-    icon: User,
-    color: "bg-gray-100 text-gray-800",
-    description: "User disconnected wallet",
-  },
-  CONTRACT_DEPLOYED: {
-    label: "Contract Deployed",
-    icon: Activity,
-    color: "bg-purple-100 text-purple-800",
-    description: "Smart contract deployed",
-  },
-  VERIFICATION_PERFORMED: {
-    label: "Verification",
-    icon: FileText,
-    color: "bg-yellow-100 text-yellow-800",
-    description: "Certificate verification performed",
   },
 };
 
@@ -141,7 +113,7 @@ export default function ActivityLogViewer() {
       setPagination((prev) => ({ ...prev, currentPage: 1 }));
       fetchLogs(1);
     }
-  }, [filters.type]); // Only trigger on type filter change
+  }, [filters.type, filters.searchTerm]); // Include searchTerm to trigger refresh when search is performed
 
   // Handle filter changes
   const handleFilterChange = (key, value) => {
@@ -201,8 +173,18 @@ export default function ActivityLogViewer() {
 
   // Get activity type config
   const getActivityConfig = (type) => {
+    // Map uppercase activity types to lowercase keys used in ACTIVITY_TYPES
+    const normalizedType =
+      type === "CERTIFICATE_REVOKED"
+        ? "certificate_revoked"
+        : type === "CERTIFICATE_ISSUED"
+        ? "certificate_issued"
+        : type === "USER_LOGIN"
+        ? "user_login"
+        : type.toLowerCase();
+
     return (
-      ACTIVITY_TYPES[type] || {
+      ACTIVITY_TYPES[normalizedType] || {
         label: type,
         icon: Activity,
         color: "bg-gray-100 text-gray-800",
@@ -341,21 +323,21 @@ export default function ActivityLogViewer() {
           <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
             {/* Activity Type Filter */}
             <div className="md:col-span-3">
-            <Select
-              value={filters.type}
-              onValueChange={(value) => handleFilterChange("type", value)}>
-              <SelectTrigger>
-                <SelectValue placeholder="Filter by type" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Activities</SelectItem>
-                {Object.entries(ACTIVITY_TYPES).map(([key, config]) => (
-                  <SelectItem key={key} value={key}>
-                    {config.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+              <Select
+                value={filters.type}
+                onValueChange={(value) => handleFilterChange("type", value)}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Filter by type" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Activities</SelectItem>
+                  {Object.entries(ACTIVITY_TYPES).map(([key, config]) => (
+                    <SelectItem key={key} value={key}>
+                      {config.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
 
             {/* Search with manual trigger */}

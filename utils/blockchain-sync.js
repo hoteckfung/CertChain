@@ -257,19 +257,7 @@ async function syncCertificateRevocation({
     // Get revoker user
     const revokerUser = await getOrCreateUser(revoker);
 
-    // Log activity
-    await mysql.logActivity({
-      user_id: revokerUser.id,
-      action: "certificate_revoked",
-      entity_type: "certificate",
-      entity_id: tokenId,
-      details: `Certificate revoked by ${revoker}`,
-      wallet_address: revoker,
-      token_id: tokenId,
-      transaction_hash: transactionHash,
-      block_number: blockNumber,
-      category: "certificate_management",
-    });
+    // Certificate revocation activity now logged from API endpoint instead
 
     console.log("📝 Certificate revoked in database");
   } catch (error) {
@@ -299,20 +287,7 @@ async function syncCertificateTransfer({
       [toUser.id, tokenId]
     );
 
-    // Log activity
-    await mysql.logActivity({
-      user_id: fromUser.id,
-      action: "certificate_transferred",
-      entity_type: "certificate",
-      entity_id: tokenId,
-      details: `Certificate transferred from ${from} to ${to}`,
-      wallet_address: from,
-      target_wallet_address: to,
-      token_id: tokenId,
-      transaction_hash: transactionHash,
-      block_number: blockNumber,
-      category: "certificate_management",
-    });
+    // Certificate transfer activity no longer logged per requirements
 
     console.log("📝 Certificate transfer synced to database");
   } catch (error) {

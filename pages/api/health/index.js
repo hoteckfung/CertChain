@@ -48,7 +48,9 @@ export default async function handler(req, res) {
 
   // Test Blockchain Connection
   try {
-    const rpcUrl = process.env.NEXT_PUBLIC_RPC_URL;
+    // Use SERVER_RPC_URL for server-side calls, fallback to NEXT_PUBLIC_RPC_URL
+    const rpcUrl =
+      process.env.SERVER_RPC_URL || process.env.NEXT_PUBLIC_RPC_URL;
     const contractAddress = process.env.NEXT_PUBLIC_CONTRACT_ADDRESS;
 
     if (!rpcUrl || !contractAddress) {

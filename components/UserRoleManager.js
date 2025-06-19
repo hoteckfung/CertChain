@@ -129,12 +129,16 @@ const UserRoleManager = () => {
       if (newRole === "issuer") {
         if (!currentRoles.isIssuer) {
           result = await grantIssuerRole(walletAddress);
+
+          // Role granted activity logging removed as per requirement
         } else {
           throw new Error("User already has issuer role");
         }
       } else if (newRole === "holder") {
         if (currentRoles.isIssuer) {
           result = await revokeIssuerRole(walletAddress);
+
+          // Role revoked activity logging removed as per requirement
         } else {
           throw new Error("User is already a holder");
         }

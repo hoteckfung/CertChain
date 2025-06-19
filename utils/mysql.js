@@ -346,6 +346,15 @@ export async function updateCertificateStatus(certificateId, status) {
   return { data, error };
 }
 
+export async function updateCertificateStatusByTokenId(tokenId, status) {
+  const { data, error } = await query(
+    "UPDATE certificates SET status = ? WHERE token_id = ?",
+    [status, tokenId]
+  );
+
+  return { data, error };
+}
+
 // Database initialization
 export async function initializeDatabase() {
   try {
@@ -422,6 +431,7 @@ export default {
   getCertificateById,
   getCertificateByTokenId,
   updateCertificateStatus,
+  updateCertificateStatusByTokenId,
   getDatabaseStats,
   initializeDatabase,
   checkConnection,

@@ -1,5 +1,19 @@
 import mysql from "./mysql";
 
+// Helper function to check if user is admin and should be excluded from logging
+const shouldSkipLogging = async (walletAddress) => {
+  if (!walletAddress || walletAddress === "anonymous") return false;
+
+  try {
+    const { data: user } = await mysql.getUserByWalletAddress(walletAddress);
+    return user && user.role === "admin";
+  } catch (error) {
+    // If we can't determine the role, log the activity to be safe
+    console.warn("Failed to check user role for activity logging:", error);
+    return false;
+  }
+};
+
 // Activity logging utility
 export const ActivityLogger = {
   // Log certificate issuance
@@ -12,6 +26,11 @@ export const ActivityLogger = {
     tokenId,
     ipfsHash
   ) {
+    // Skip logging if issuer is admin
+    if (await shouldSkipLogging(issuerWallet)) {
+      return { success: true, skipped: true, reason: "Admin action excluded" };
+    }
+
     return await mysql.logActivity({
       action: "CERTIFICATE_ISSUED",
       wallet_address: issuerWallet,
@@ -21,7 +40,7 @@ export const ActivityLogger = {
       block_number: blockNumber,
       token_id: tokenId,
       ipfs_hash: ipfsHash,
-      category: "certificate",
+      category: "certificate_management",
     });
   },
 
@@ -34,6 +53,11 @@ export const ActivityLogger = {
     blockNumber,
     tokenId
   ) {
+    // Skip logging if issuer is admin
+    if (await shouldSkipLogging(issuerWallet)) {
+      return { success: true, skipped: true, reason: "Admin action excluded" };
+    }
+
     return await mysql.logActivity({
       action: "CERTIFICATE_REVOKED",
       wallet_address: issuerWallet,
@@ -42,73 +66,68 @@ export const ActivityLogger = {
       transaction_hash: transactionHash,
       block_number: blockNumber,
       token_id: tokenId,
-      category: "certificate",
-    });
-  },
-
-  // Log role changes
-  async logRoleGranted(adminWallet, targetWallet, role, details) {
-    return await mysql.logActivity({
-      action: "ROLE_GRANTED",
-      wallet_address: adminWallet,
-      target_wallet_address: targetWallet,
-      details: details || `${role} role granted`,
-      category: "user_management",
-    });
-  },
-
-  async logRoleRevoked(adminWallet, targetWallet, role, details) {
-    return await mysql.logActivity({
-      action: "ROLE_REVOKED",
-      wallet_address: adminWallet,
-      target_wallet_address: targetWallet,
-      details: details || `${role} role revoked`,
-      category: "user_management",
+      category: "certificate_management",
     });
   },
 
   // Log authentication events
   async logUserLogin(walletAddress, details) {
+    // Skip logging if user is admin
+    if (await shouldSkipLogging(walletAddress)) {
+      return { success: true, skipped: true, reason: "Admin action excluded" };
+    }
+
     return await mysql.logActivity({
       action: "USER_LOGIN",
       wallet_address: walletAddress,
-      details: details || "User connected wallet",
+      details: details || "User logged in successfully.",
       category: "authentication",
     });
   },
 
-  async logUserLogout(walletAddress, details) {
-    return await mysql.logActivity({
-      action: "USER_LOGOUT",
-      wallet_address: walletAddress,
-      details: details || "User disconnected wallet",
-      category: "authentication",
-    });
-  },
+  // logUserLogout removed per user request
 
   // Log verification events
   async logVerificationPerformed(verifierWallet, ipfsHash, details) {
+    // Skip logging if verifier is admin (but allow anonymous verifications)
+    if (
+      verifierWallet !== "anonymous" &&
+      (await shouldSkipLogging(verifierWallet))
+    ) {
+      return { success: true, skipped: true, reason: "Admin action excluded" };
+    }
+
     return await mysql.logActivity({
       action: "VERIFICATION_PERFORMED",
       wallet_address: verifierWallet || "anonymous",
       details: details || "Certificate verification performed",
       ipfs_hash: ipfsHash,
-      category: "verification",
+      category: "system_event",
     });
   },
 
   // Log contract events
   async logContractDeployed(deployerWallet, contractAddress, details) {
+    // Skip logging if deployer is admin
+    if (await shouldSkipLogging(deployerWallet)) {
+      return { success: true, skipped: true, reason: "Admin action excluded" };
+    }
+
     return await mysql.logActivity({
       action: "CONTRACT_DEPLOYED",
       wallet_address: deployerWallet,
       details: details || `Smart contract deployed at ${contractAddress}`,
-      category: "blockchain",
+      category: "blockchain_interaction",
     });
   },
 
   // Generic activity logging
   async logActivity(actionType, walletAddress, details, additionalData = {}) {
+    // Skip logging if user is admin
+    if (await shouldSkipLogging(walletAddress)) {
+      return { success: true, skipped: true, reason: "Admin action excluded" };
+    }
+
     return await mysql.logActivity({
       action: actionType,
       wallet_address: walletAddress,
@@ -130,21 +149,14 @@ export const ActivityLogger = {
         ipfs_hash: "QmbbjgJgnSEhMJMo7WuKqt49AStkmK3Ux6qDnJwScR98Cc",
         transaction_hash: "0x1234567890abcdef1234567890abcdef12345678",
         block_number: 18450123,
-        category: "certificate",
-      },
-      {
-        action: "ROLE_GRANTED",
-        wallet_address: "0x241d...e45a",
-        target_wallet_address: "0x789a...def1",
-        details: "Issuer role granted to user",
-        category: "user_management",
+        category: "certificate_management",
       },
       {
         action: "VERIFICATION_PERFORMED",
         wallet_address: "anonymous",
         details: "Public certificate verification performed",
         ipfs_hash: "QmbbjgJgnSEhMJMo7WuKqt49AStkmK3Ux6qDnJwScR98Cc",
-        category: "verification",
+        category: "system_event",
       },
       {
         action: "USER_LOGIN",
@@ -160,26 +172,13 @@ export const ActivityLogger = {
         token_id: 2,
         transaction_hash: "0xabcdef1234567890abcdef1234567890abcdef12",
         block_number: 18450124,
-        category: "certificate",
+        category: "certificate_management",
       },
       {
         action: "CONTRACT_DEPLOYED",
         wallet_address: "0x241d...e45a",
         details: "CertChain contract deployed to mainnet",
-        category: "blockchain",
-      },
-      {
-        action: "USER_LOGOUT",
-        wallet_address: "0x789a...def1",
-        details: "User disconnected wallet",
-        category: "authentication",
-      },
-      {
-        action: "ROLE_REVOKED",
-        wallet_address: "0x241d...e45a",
-        target_wallet_address: "0x456b...cde2",
-        details: "Issuer role revoked from inactive user",
-        category: "user_management",
+        category: "blockchain_interaction",
       },
     ];
 

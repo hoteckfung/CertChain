@@ -1,12 +1,21 @@
 #!/bin/bash
 
-# 🚀 CertChain Deployment Script
-# This script automates the deployment of your blockchain certificate system
-# Smart contracts must be deployed manually (see README.md for instructions)
+# 🚀 CertChain Deployment Script (Linux/Mac) v4.0
+# Complete setup automation for blockchain certificate system
+# Perfect for first-time users who just cloned the repository
 
 set -e  # Exit on any error
 
-echo "🚀 Starting CertChain Deployment..."
+echo ""
+echo "██████╗███████╗██████╗████████╗ ██████╗██╗  ██╗ █████╗ ██╗███╗   ██╗"
+echo "██╔════╝██╔════╝██╔══██╚══██╔══╝██╔════╝██║  ██║██╔══██╗██║████╗  ██║"
+echo "██║     █████╗  ██████╔╝  ██║   ██║     ███████║███████║██║██╔██╗ ██║"
+echo "██║     ██╔══╝  ██╔══██╗  ██║   ██║     ██╔══██║██╔══██║██║██║╚██╗██║"
+echo "╚██████╗███████╗██║  ██║  ██║   ╚██████╗██║  ██║██║  ██║██║██║ ╚████║"
+echo " ╚═════╝╚══════╝╚═╝  ╚═╝  ╚═╝    ╚═════╝╚═╝  ╚═╝╚═╝  ╚═╝╚═╝╚═╝  ╚═══╝"
+echo ""
+echo "    🏆 Blockchain Certificate Management System v4.0"
+echo "    🐧 Linux/Mac Deployment Script - Easy Setup for Everyone!"
 echo ""
 
 # Colors for output
@@ -14,6 +23,8 @@ RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
+PURPLE='\033[0;35m'
+CYAN='\033[0;36m'
 NC='\033[0m' # No Color
 
 # Function to print colored output
@@ -33,205 +44,614 @@ print_error() {
     echo -e "${RED}[ERROR]${NC} $1"
 }
 
-# Check if Docker is installed
-check_docker() {
+print_title() {
+    echo -e "${PURPLE}[TITLE]${NC} === $1 ==="
+}
+
+print_step() {
+    echo -e "${CYAN}[STEP]${NC} $1"
+}
+
+# Show comprehensive help
+show_help() {
+    echo "╔════════════════════════════════════════════════════════════════════╗"
+    echo "║                       CERTCHAIN SETUP GUIDE                        ║"
+    echo "╚════════════════════════════════════════════════════════════════════╝"
+    echo ""
+    echo "🎯 QUICK START (for first-time users):"
+    echo "   ./scripts/deploy.sh --setup      Interactive guided setup"
+    echo "   ./scripts/deploy.sh              Standard deployment"
+    echo ""
+    echo "🛠️  MANAGEMENT OPTIONS:"
+    echo "   --help, -h        Show this comprehensive help"
+    echo "   --setup           Interactive guided setup with prerequisites check"
+    echo "   --verify          Check all prerequisites without installing"
+    echo "   --fresh           Complete fresh start (clean DB + new contract)"
+    echo "   --clean           Clean database only (keeps contract)"
+    echo "   --health          Check application health status"
+    echo "   --logs            Show real-time application logs"
+    echo "   --stop            Stop all Docker services"
+    echo ""
+    echo "📋 WHAT YOU NEED BEFORE STARTING:"
+    echo "   ✅ Docker and Docker Compose installed and running"
+    echo "   ✅ Node.js (v16+) for smart contract deployment"
+    echo "   ✅ Git for cloning the repository"
+    echo "   ✅ MetaMask browser extension"
+    echo "   ✅ Ganache GUI for local blockchain"
+    echo ""
+    echo "🚀 TYPICAL WORKFLOW FOR NEW USERS:"
+    echo "   1. git clone [repository-url]"
+    echo "   2. cd CertChain"
+    echo "   3. ./scripts/deploy.sh --setup"
+    echo "   4. Follow the interactive prompts"
+    echo "   5. Connect MetaMask and start using!"
+    echo ""
+    echo "💡 TROUBLESHOOTING:"
+    echo "   • If stuck: ./scripts/deploy.sh --verify"
+    echo "   • For logs: ./scripts/deploy.sh --logs"
+    echo "   • For help: Visit README.md or GitHub issues"
+    echo ""
+    read -p "Press Enter to continue..."
+}
+
+# Verify prerequisites with detailed output
+verify_prerequisites_detailed() {
+    print_step "Checking system prerequisites..."
+    echo ""
+    
+    local failed=0
+    
+    echo "[1/4] 🐳 Checking Docker..."
     if ! command -v docker &> /dev/null; then
-        print_error "Docker is not installed. Please install Docker first."
-        echo "Visit: https://docs.docker.com/get-docker/"
-        exit 1
+        echo "   ❌ Docker is not installed or not in PATH"
+        echo "   📥 Install from: https://docs.docker.com/get-docker/"
+        echo "   💡 Make sure Docker is running after installation"
+        failed=1
+    else
+        if ! docker --version &> /dev/null; then
+            echo "   ❌ Docker command failed"
+            echo "   💡 Make sure Docker is running"
+            failed=1
+        else
+            echo "   ✅ Docker is installed and running"
+        fi
     fi
     
     if ! command -v docker-compose &> /dev/null; then
-        print_error "Docker Compose is not installed. Please install Docker Compose first."
-        echo "Visit: https://docs.docker.com/compose/install/"
-        exit 1
+        echo "   ❌ Docker Compose is not available"
+        echo "   📥 Install from: https://docs.docker.com/compose/install/"
+        failed=1
+    else
+        echo "   ✅ Docker Compose is available"
     fi
     
-    print_success "Docker and Docker Compose are installed"
+    echo "[2/4] 📦 Checking Node.js..."
+    if ! command -v node &> /dev/null; then
+        echo "   ❌ Node.js is not installed"
+        echo "   📥 Download from: https://nodejs.org/ (LTS version recommended)"
+        failed=1
+    else
+        echo "   ✅ Node.js is installed ($(node --version))"
+    fi
+    
+    echo "[3/4] 📥 Checking NPM packages..."
+    if [ ! -d "node_modules" ]; then
+        echo "   📦 Installing Node.js dependencies..."
+        if ! npm install; then
+            echo "   ❌ Failed to install dependencies"
+            echo "   💡 Try: npm cache clean --force && npm install"
+            failed=1
+        fi
+    fi
+    echo "   ✅ NPM dependencies are ready"
+    
+    echo "[4/4] 🦊 Checking MetaMask (optional verification)..."
+    echo "   💡 Make sure MetaMask browser extension is installed"
+    echo "   📥 Get it from: https://metamask.io/"
+    echo "   ✅ MetaMask check reminder completed"
+    
+    return $failed
 }
 
-# Check if .env.local exists
-check_environment() {
-    if [ ! -f ".env.local" ]; then
-        print_warning ".env.local file not found"
-        print_status "Creating .env.local template..."
-        
-        cat > .env.local << EOF
-# MySQL Configuration (handled by Docker)
+# Check if Docker services are running
+check_docker_running() {
+    docker-compose ps &> /dev/null
+    return $?
+}
+
+# Create environment file
+create_env_file() {
+    print_step "Creating .env.local configuration file..."
+    
+    cat > .env.local << EOF
+# CertChain Environment Configuration
+# Generated by deployment script on $(date)
+
+# Database Configuration (auto-managed by Docker)
 MYSQL_HOST=mysql
 MYSQL_PORT=3306
 MYSQL_USER=certchain_user
 MYSQL_PASSWORD=certchain_password
 MYSQL_DATABASE=certchain
 
-# Blockchain Configuration (update after manual contract deployment)
-NEXT_PUBLIC_CONTRACT_ADDRESS=0x85C553D13BdD2213910043E387072AC412c33653
+# Blockchain Configuration (update after contract deployment)
+NEXT_PUBLIC_CONTRACT_ADDRESS=
 NEXT_PUBLIC_CHAIN_ID=1337
 NEXT_PUBLIC_RPC_URL=http://127.0.0.1:7545
 
-# Production settings
+# Deployer Configuration (REQUIRED - get from Ganache GUI)
+# Click the key icon next to any account in Ganache
+DEPLOYER_PRIVATE_KEY=
+
+# Application Settings
 NODE_ENV=production
 EOF
-        
-        print_success "Created .env.local with default blockchain configuration"
-        print_warning "Remember to update NEXT_PUBLIC_CONTRACT_ADDRESS after deploying your smart contract"
-    fi
     
-    print_success "Environment configuration ready"
+    echo "   ✅ Created .env.local template"
+    echo ""
+    echo "🔑 IMPORTANT: You need to add your DEPLOYER_PRIVATE_KEY to .env.local"
+    echo "   1. Start Ganache GUI"
+    echo "   2. Click the 🔑 icon next to any account"
+    echo "   3. Copy the private key"
+    echo "   4. Add it to .env.local: DEPLOYER_PRIVATE_KEY=0xYourKeyHere"
+    echo ""
 }
 
-# Deploy using Docker Compose
-deploy_with_docker() {
-    print_status "Deploying application with Docker..."
+# Check environment configuration
+check_environment() {
+    print_step "Checking environment configuration..."
     
-    # Build and start containers
+    if [ ! -f ".env.local" ]; then
+        echo "   ⚠️  No .env.local found, creating template..."
+        create_env_file
+    else
+        echo "   ✅ Environment file exists"
+    fi
+    
+    # Check for critical missing values
+    if ! grep -q "DEPLOYER_PRIVATE_KEY=0x" .env.local; then
+        echo "   ⚠️  DEPLOYER_PRIVATE_KEY not set in .env.local"
+        echo "   💡 You'll need this for smart contract deployment"
+    fi
+}
+
+# Check Ganache with detailed instructions
+check_ganache_with_instructions() {
+    print_step "Checking Ganache connection..."
+    
+    if ! curl -s http://127.0.0.1:7545 > /dev/null 2>&1; then
+        echo "   ❌ Cannot connect to Ganache on port 7545"
+        echo ""
+        echo "   📥 Please download and start Ganache GUI:"
+        echo "      1. Visit: https://trufflesuite.com/ganache/"
+        echo "      2. Download and install Ganache GUI"
+        echo "      3. Click \"QUICKSTART\" (easiest option)"
+        echo "      4. Verify settings:"
+        echo "         - RPC Server: HTTP://127.0.0.1:7545"
+        echo "         - Chain ID: 1337"
+        echo ""
+        echo "   💡 Once Ganache is running, try this command again"
+        return 1
+    fi
+    
+    echo "   ✅ Ganache is running and accessible"
+    return 0
+}
+
+# Start Docker services
+start_docker_services() {
+    print_step "Starting Docker services..."
+    
+    echo "   🛑 Stopping any existing containers..."
     docker-compose down --remove-orphans > /dev/null 2>&1
-    docker-compose up -d --build
     
-    print_status "Waiting for services to start..."
+    echo "   🔨 Building and starting containers..."
+    if ! docker-compose up -d --build; then
+        echo "   ❌ Failed to start Docker services"
+        echo "   💡 Make sure Docker is running"
+        echo "   💡 Try: docker-compose logs for more details"
+        return 1
+    fi
+    
+    echo "   ✅ Docker services started successfully"
+    return 0
+}
+
+# Wait for services to be ready
+wait_for_services() {
+    print_step "Waiting for services to initialize..."
     sleep 10
     
-    # Wait for MySQL to be ready
-    print_status "Waiting for database to be ready..."
+    print_step "Waiting for database to be ready..."
     for i in {1..30}; do
-        if docker-compose exec -T mysql mysqladmin ping -h localhost -u root -pmysql --silent; then
-            print_success "Database is ready"
-            break
+        if docker-compose exec -T mysql mysqladmin ping -h localhost -u root -pmysql --silent > /dev/null 2>&1; then
+            echo "   ✅ Database is ready"
+            return 0
         fi
         if [ $i -eq 30 ]; then
-            print_error "Database failed to start within 5 minutes"
-            docker-compose logs mysql
-            exit 1
+            echo "   ❌ Database failed to start within 5 minutes"
+            echo "   💡 Check logs: docker-compose logs mysql"
+            return 1
         fi
+        echo "   ⏳ Database starting... (attempt $i/30)"
         sleep 10
     done
 }
 
 # Test deployment
 test_deployment() {
-    print_status "Testing deployment..."
+    print_step "Testing deployment..."
     
-    # Test web application
-    if curl -f http://localhost:3000 > /dev/null 2>&1; then
-        print_success "Web application is responding"
+    echo "   🌐 Testing web application..."
+    if ! curl -f http://localhost:3000 > /dev/null 2>&1; then
+        echo "   ❌ Web application not responding"
+        echo "   💡 Check logs: docker-compose logs webapp"
+        return 1
+    fi
+    echo "   ✅ Web application is running"
+    
+    echo "   🏥 Testing health endpoint..."
+    sleep 5
+    if curl -f http://localhost:3000/api/health > /dev/null 2>&1; then
+        echo "   ✅ Health endpoint is working"
+        echo ""
+        echo "📊 Current System Status:"
+        curl -s http://localhost:3000/api/health | python3 -m json.tool 2>/dev/null || curl -s http://localhost:3000/api/health
+        echo ""
     else
-        print_error "Web application is not responding"
-        docker-compose logs webapp
-        exit 1
+        echo "   ⚠️  Health endpoint not responding yet (this is normal)"
     fi
     
-    # Test health endpoint
-    print_status "Checking system health status..."
-    sleep 5  # Give the app time to fully start
+    return 0
+}
+
+# Deploy smart contract for fresh start
+deploy_smart_contract_fresh() {
+    print_step "Deploying smart contract..."
     
-    if curl -f http://localhost:3000/api/health > /dev/null 2>&1; then
-        print_success "Health endpoint is working"
-        echo ""
-        echo "🎯 System Health Status:"
-        curl -s http://localhost:3000/api/health | python3 -m json.tool 2>/dev/null || curl -s http://localhost:3000/api/health
+    # Check if DEPLOYER_PRIVATE_KEY is set
+    if ! grep -q "DEPLOYER_PRIVATE_KEY=0x" .env.local; then
+        echo "   ❌ DEPLOYER_PRIVATE_KEY not set in .env.local"
+        echo "   💡 Please add your Ganache private key and try again"
+        return 1
+    fi
+    
+    echo "   🔨 Compiling contracts..."
+    if ! npx hardhat compile; then
+        echo "   ❌ Contract compilation failed"
+        return 1
+    fi
+    
+    echo "   📤 Deploying to Ganache..."
+    if ! npx hardhat run scripts/deploy.js --network ganache; then
+        echo "   ❌ Contract deployment failed"
+        echo "   💡 Check that Ganache is running and DEPLOYER_PRIVATE_KEY is correct"
+        return 1
+    fi
+    
+    echo "   ✅ Smart contract deployed successfully"
+    return 0
+}
+
+# Fresh deployment process
+fresh_deployment() {
+    echo ""
+    print_step "Step 1: Prerequisites check..."
+    if ! verify_prerequisites_detailed; then
+        return 1
+    fi
+    
+    echo ""
+    print_step "Step 2: Starting Docker services..."
+    if ! start_docker_services; then
+        return 1
+    fi
+    
+    if ! wait_for_services; then
+        return 1
+    fi
+    
+    echo ""
+    print_step "Step 3: Cleaning database..."
+    if ! node scripts/clean-database.js; then
+        print_error "Database clean failed"
+        return 1
+    fi
+    
+    echo ""
+    print_step "Step 4: Checking Ganache..."
+    if ! check_ganache_with_instructions; then
+        return 1
+    fi
+    
+    echo ""
+    print_step "Step 5: Deploying smart contract..."
+    if ! deploy_smart_contract_fresh; then
+        return 1
+    fi
+    
+    echo ""
+    print_step "Step 6: Restarting services with new config..."
+    docker-compose restart webapp
+    echo "   ✅ Services restarted"
+    
+    return 0
+}
+
+# Clean database only
+clean_database() {
+    echo "╔════════════════════════════════════════════════════════════════════╗"
+    echo "║                        DATABASE CLEANUP                            ║"
+    echo "╚════════════════════════════════════════════════════════════════════╝"
+    echo ""
+    echo "⚠️  WARNING: This will remove ALL data from the database!"
+    echo "   • All users will be deleted"
+    echo "   • All certificates will be deleted"
+    echo "   • All activity logs will be deleted"
+    echo "   • All sessions will be cleared"
+    echo ""
+    read -p "Are you sure you want to proceed? (y/N): " confirm
+    if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
+        print_status "Database cleanup cancelled"
+        return 0
+    fi
+    
+    if ! check_docker_running; then
+        print_step "Starting Docker services for database access..."
+        if ! start_docker_services || ! wait_for_services; then
+            return 1
+        fi
+    fi
+    
+    echo ""
+    print_step "Cleaning database..."
+    if ! node scripts/clean-database.js; then
+        print_error "Database cleanup failed"
+        return 1
+    fi
+    
+    echo ""
+    print_success "Database cleaned successfully!"
+    echo "💡 Visit http://localhost:3000/clear-storage.html to clear browser cache"
+    echo ""
+}
+
+# Fresh start with confirmation
+fresh_start() {
+    echo "╔════════════════════════════════════════════════════════════════════╗"
+    echo "║                         FRESH START MODE                           ║"
+    echo "╚════════════════════════════════════════════════════════════════════╝"
+    echo ""
+    echo "🔄 This will perform a COMPLETE fresh start:"
+    echo "   1. ✅ Clean ALL database data"
+    echo "   2. ✅ Deploy NEW smart contract"
+    echo "   3. ✅ Update configuration automatically"
+    echo "   4. ✅ Restart all services"
+    echo ""
+    echo "⚠️  Make sure you have:"
+    echo "   • Ganache GUI running on port 7545"
+    echo "   • DEPLOYER_PRIVATE_KEY set in .env.local"
+    echo ""
+    
+    read -p "Continue with complete fresh start? (y/N): " confirm
+    if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
+        print_status "Fresh start cancelled"
+        return 0
+    fi
+    
+    echo ""
+    print_status "Starting fresh deployment process..."
+    if fresh_deployment; then
+        deployment_complete
     else
-        print_warning "Health endpoint is not responding yet"
+        print_error "Fresh deployment failed"
+        return 1
     fi
 }
 
-# Show deployment info
-show_deployment_info() {
+# Guided setup
+guided_setup() {
+    echo "╔════════════════════════════════════════════════════════════════════╗"
+    echo "║                    INTERACTIVE GUIDED SETUP                        ║"
+    echo "╚════════════════════════════════════════════════════════════════════╝"
     echo ""
-    echo "🎉 DOCKER DEPLOYMENT SUCCESSFUL!"
+    echo "🎯 This will guide you through setting up CertChain step by step!"
     echo ""
-    echo "📍 Your application is running:"
-    echo "   🌐 Web App:         http://localhost:3000"
-    echo "   📊 Database Admin:  http://localhost:8080"
-    echo "   🔍 Health Check:    http://localhost:3000/api/health"
+    
+    if ! verify_prerequisites_detailed; then
+        echo ""
+        print_error "Prerequisites check failed. Please install missing components and try again."
+        echo "💡 Run './scripts/deploy.sh --verify' to check prerequisites only."
+        return 1
+    fi
+    
     echo ""
-    echo "📋 Management Commands:"
-    echo "   View logs:          docker-compose logs -f"
-    echo "   Stop everything:    ./scripts/deploy.sh --stop"
-    echo "   Check health:       ./scripts/deploy.sh --health"
+    print_success "All prerequisites verified! Continuing with setup..."
     echo ""
-    echo "⚠️  IMPORTANT - Smart Contract Deployment Required:"
+    
+    # Check if .env.local exists
+    if [ -f ".env.local" ]; then
+        echo "📄 Found existing .env.local configuration."
+        read -p "Do you want to recreate it? (y/N): " overwrite
+        if [[ "$overwrite" =~ ^[Yy]$ ]]; then
+            create_env_file
+        fi
+    else
+        echo "📄 Creating environment configuration..."
+        create_env_file
+    fi
+    
     echo ""
-    echo "   Your web application is running, but you need to manually deploy"
-    echo "   the smart contract to enable blockchain functionality."
+    print_step "Starting Docker services..."
+    if ! start_docker_services || ! wait_for_services; then
+        return 1
+    fi
+    
     echo ""
-    echo "   📋 Manual Smart Contract Deployment Steps:"
-    echo "   1. Install Node.js and npm (if not already installed)"
-    echo "   2. Install dependencies: npm install"
-    echo "   3. Start Ganache GUI app with these settings:"
-    echo "      - RPC Server: HTTP://127.0.0.1:7545"
-    echo "      - Chain ID: 1337"
-    echo "   4. Deploy contract: npx hardhat run scripts/deploy.js --network ganache"
-    echo "   5. Update .env.local with the new contract address"
-    echo "   6. Restart containers: docker-compose restart webapp"
+    print_step "Checking Ganache status..."
+    check_ganache_with_instructions
+    
     echo ""
-    echo "   📖 For detailed instructions, see README.md - 'Manual Smart Contract Deployment' section"
+    print_success "Basic setup complete!"
     echo ""
-    echo "🔧 Current Status:"
-    echo "   ✅ Database and web app running"
-    echo "   ⏳ Smart contract deployment pending (manual step required)"
+    echo "📋 NEXT STEPS:"
+    echo "   1. 🔑 Set your DEPLOYER_PRIVATE_KEY in .env.local (from Ganache)"
+    echo "   2. 🚀 Deploy smart contract: npx hardhat run scripts/deploy.js --network ganache"
+    echo "   3. 🔄 Update config: node scripts/update-contract-address.js [CONTRACT_ADDRESS]"
+    echo "   4. 🌐 Visit: http://localhost:3000"
     echo ""
+    echo "💡 TIP: Use './scripts/deploy.sh --fresh' for complete automated deployment"
+    echo "     or continue manually with the steps above."
+    echo ""
+    read -p "Press Enter to continue..."
+}
+
+# Standard deployment
+standard_deployment() {
+    echo "╔════════════════════════════════════════════════════════════════════╗"
+    echo "║                       STANDARD DEPLOYMENT                          ║"
+    echo "╚════════════════════════════════════════════════════════════════════╝"
+    echo ""
+    print_step "Setting up CertChain with existing configuration..."
+    echo ""
+    
+    if ! verify_prerequisites_detailed; then
+        echo ""
+        echo "💡 TIP: Run './scripts/deploy.sh --setup' for interactive guided setup"
+        return 1
+    fi
+    
+    check_environment
+    
+    if ! start_docker_services || ! wait_for_services; then
+        return 1
+    fi
+    
+    test_deployment
+    deployment_complete
+}
+
+# Show deployment completion info
+deployment_complete() {
+    echo ""
+    echo "╔════════════════════════════════════════════════════════════════════╗"
+    echo "║                     🎉 DEPLOYMENT SUCCESSFUL! 🎉                   ║"
+    echo "╚════════════════════════════════════════════════════════════════════╝"
+    echo ""
+    echo "🌐 YOUR CERTCHAIN SYSTEM IS NOW RUNNING:"
+    echo "   💻 Web Application:     http://localhost:3000"
+    echo "   🗄️  Database Admin:      http://localhost:8080"
+    echo "   🏥 Health Check:        http://localhost:3000/api/health"
+    echo "   🧹 Storage Cleaner:     http://localhost:3000/clear-storage.html"
+    echo ""
+    echo "🛠️  MANAGEMENT COMMANDS:"
+    echo "   📊 View logs:           ./scripts/deploy.sh --logs"
+    echo "   🛑 Stop services:       ./scripts/deploy.sh --stop"
+    echo "   🏥 Check health:        ./scripts/deploy.sh --health"
+    echo "   🧹 Clean database:      ./scripts/deploy.sh --clean"
+    echo "   🔄 Fresh restart:       ./scripts/deploy.sh --fresh"
+    echo ""
+    echo "🚀 QUICK START GUIDE:"
+    echo "   1. 🦊 Open MetaMask and add Ganache network:"
+    echo "      • Network Name: Ganache Local"
+    echo "      • RPC URL: http://127.0.0.1:7545"
+    echo "      • Chain ID: 1337"
+    echo "      • Currency: ETH"
+    echo ""
+    echo "   2. 🔑 Import your Ganache account to MetaMask:"
+    echo "      • In Ganache: Click 🔑 next to any account"
+    echo "      • In MetaMask: Import Account → Paste private key"
+    echo ""
+    echo "   3. 🌐 Visit your application:"
+    echo "      • Go to http://localhost:3000"
+    echo "      • Connect your MetaMask wallet"
+    echo "      • Start issuing certificates!"
+    echo ""
+    echo "💡 TROUBLESHOOTING:"
+    echo "   • No certificates showing? Clear browser storage at /clear-storage.html"
+    echo "   • Contract errors? Check Ganache is running and wallet is connected"
+    echo "   • Database issues? Try ./scripts/deploy.sh --clean"
+    echo ""
+    echo "📚 For detailed documentation, check the README.md file"
+    echo ""
+    read -p "Press Enter to continue..."
 }
 
 # Stop all services
 stop_all_services() {
-    print_status "Stopping all services..."
+    print_step "Stopping all services..."
     docker-compose down
     print_success "All services stopped"
     print_status "Note: This does not stop Ganache GUI if running separately"
 }
 
-# Main deployment flow
-main() {
-    echo "🏗️  CertChain Blockchain Certificate System"
-    echo "   Docker Deployment Script v2.1"
+# Verify prerequisites only
+verify_prerequisites_only() {
+    if verify_prerequisites_detailed; then
+        echo ""
+        print_success "All prerequisites are properly installed!"
+        echo "🚀 You're ready to deploy CertChain."
+        echo ""
+    else
+        return 1
+    fi
+}
+
+# Health check
+health_check() {
+    print_step "Checking CertChain application health..."
     echo ""
-    
-    print_status "Step 1: Checking prerequisites..."
-    check_docker
-    
-    print_status "Step 2: Checking environment configuration..."
-    check_environment
-    
-    print_status "Step 3: Deploying application with Docker..."
-    deploy_with_docker
-    
-    print_status "Step 4: Testing deployment..."
-    test_deployment
-    
-    show_deployment_info
+    if curl -s http://localhost:3000/api/health > /dev/null 2>&1; then
+        print_success "Application is healthy and responding!"
+        echo ""
+        echo "📊 Current System Status:"
+        curl -s http://localhost:3000/api/health | python3 -m json.tool 2>/dev/null || curl -s http://localhost:3000/api/health
+    else
+        print_error "Application is not responding. Is it running?"
+        echo "💡 Try: ./scripts/deploy.sh"
+    fi
+    echo ""
 }
 
 # Handle script arguments
 case "${1:-}" in
     --help|-h)
-        echo "CertChain Docker Deployment Script"
-        echo ""
-        echo "Usage: ./scripts/deploy.sh [options]"
-        echo ""
-        echo "Options:"
-        echo "  --help, -h     Show this help message"
-        echo "  --logs         Show application logs"
-        echo "  --health       Check application health"
-        echo "  --stop         Stop all Docker services"
-        echo ""
-        echo "Note: Smart contracts must be deployed manually using Ganache GUI"
-        echo "See README.md for complete deployment instructions"
+        show_help
         exit 0
         ;;
+    --setup)
+        guided_setup
+        exit $?
+        ;;
+    --verify)
+        verify_prerequisites_only
+        exit $?
+        ;;
     --logs)
+        echo "📊 Showing real-time application logs..."
+        echo "💡 Press Ctrl+C to stop viewing logs"
+        echo ""
         docker-compose logs -f
         exit 0
         ;;
     --health)
-        echo "🔍 Checking application health..."
-        curl -s http://localhost:3000/api/health | python3 -m json.tool
+        health_check
         exit 0
         ;;
     --stop)
         stop_all_services
         exit 0
         ;;
+    --clean)
+        clean_database
+        exit $?
+        ;;
+    --fresh)
+        fresh_start
+        exit $?
+        ;;
     *)
-        main
+        standard_deployment
+        exit $?
         ;;
 esac 

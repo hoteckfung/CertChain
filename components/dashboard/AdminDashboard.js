@@ -11,6 +11,7 @@ import {
 import { Alert, AlertDescription } from "../ui/alert";
 import UserRoleManager from "../UserRoleManager";
 import ActivityLogViewer from "../ActivityLogViewer";
+import ActivityOverview from "../ActivityOverview";
 import {
   BarChart,
   Bar,
@@ -59,67 +60,8 @@ function AdminDashboard({ activeTab }) {
 
             {/* Sidebar */}
             <div className="md:col-span-1">
-              {/* Activity Stats */}
-              <div className="bg-white rounded-lg shadow-sm p-6 sticky top-4">
-                <h2 className="text-xl font-semibold mb-4">
-                  Activity Overview
-                </h2>
-                <div className="space-y-4">
-                  <div className="bg-gray-50 p-4 rounded">
-                    <p className="text-sm text-gray-500 mb-1">
-                      Activity Overview
-                    </p>
-                    <p className="text-sm text-gray-600">
-                      View detailed activity logs in the Activity Log tab
-                    </p>
-                  </div>
-                  <div className="space-y-2">
-                    <div className="flex justify-between items-center">
-                      <p className="text-sm">Certificate Issuance</p>
-                      <span className="px-2 py-1 text-xs font-medium rounded-full bg-green-100 text-green-800">
-                        Live Data
-                      </span>
-                    </div>
-                    <div className="flex justify-between items-center">
-                      <p className="text-sm">Certificate Verification</p>
-                      <span className="px-2 py-1 text-xs font-medium rounded-full bg-blue-100 text-blue-800">
-                        Real-time
-                      </span>
-                    </div>
-                    <div className="flex justify-between items-center">
-                      <p className="text-sm">User Management</p>
-                      <span className="px-2 py-1 text-xs font-medium rounded-full bg-purple-100 text-purple-800">
-                        Blockchain
-                      </span>
-                    </div>
-                  </div>
-                  <div className="border-t pt-4 mt-2">
-                    <p className="text-sm text-gray-500 mb-2">
-                      Activity Timeline
-                    </p>
-                    <div className="h-24 flex items-end justify-between">
-                      {[...Array(7)].map((_, i) => (
-                        <div key={i} className="w-8">
-                          <div
-                            className="bg-primary-blue rounded-t"
-                            style={{
-                              height: `${
-                                Math.floor(Math.random() * 70) + 10
-                              }px`,
-                            }}></div>
-                          <p className="text-xs text-center mt-1">
-                            {new Date(
-                              Date.now() - (6 - i) * 24 * 60 * 60 * 1000
-                            ).toLocaleDateString("en-US", {
-                              weekday: "short",
-                            })}
-                          </p>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              </div>
+              {/* Enhanced Activity Overview */}
+              <ActivityOverview className="sticky top-4" />
             </div>
           </div>
         );

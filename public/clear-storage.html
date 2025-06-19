@@ -4,132 +4,281 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Clear Storage - CertChain</title>
+    <title>Clear CertChain Storage</title>
     <style>
         body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            max-width: 600px;
-            margin: 100px auto;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
             padding: 20px;
-            background-color: #f5f5f5;
+            line-height: 1.6;
         }
 
         .container {
-            background: white;
-            padding: 40px;
-            border-radius: 10px;
-            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-            text-align: center;
+            background-color: #f8f9fa;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        h1 {
+            color: #2c3e50;
+            border-bottom: 2px solid #3498db;
+            padding-bottom: 10px;
+        }
+
+        button {
+            background-color: #3498db;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            margin-right: 10px;
+        }
+
+        button:hover {
+            background-color: #2980b9;
+        }
+
+        button.danger {
+            background-color: #e74c3c;
+        }
+
+        button.danger:hover {
+            background-color: #c0392b;
         }
 
         .success {
-            color: #28a745;
-            font-size: 18px;
-            margin: 20px 0;
+            color: #27ae60;
+            font-weight: bold;
         }
 
         .warning {
-            color: #dc3545;
-            font-size: 14px;
-            background: #ffeaa7;
+            color: #e67e22;
+            font-weight: bold;
+        }
+
+        .error {
+            color: #e74c3c;
+            font-weight: bold;
+        }
+
+        .result {
+            margin-top: 20px;
             padding: 15px;
-            border-radius: 5px;
-            margin: 20px 0;
+            border-radius: 4px;
+            background-color: #ecf0f1;
         }
 
-        .next-steps {
-            text-align: left;
-            background: #e3f2fd;
-            padding: 20px;
-            border-radius: 5px;
-            margin: 20px 0;
-        }
-
-        .button {
-            background: #007bff;
-            color: white;
-            padding: 10px 20px;
-            border: none;
-            border-radius: 5px;
-            cursor: pointer;
-            text-decoration: none;
-            display: inline-block;
-            margin: 10px;
-        }
-
-        .button:hover {
-            background: #0056b3;
+        ul {
+            padding-left: 20px;
         }
     </style>
 </head>
 
 <body>
     <div class="container">
-        <h1>🧹 CertChain Storage Cleanup</h1>
+        <h1>CertChain Storage Cleaner</h1>
+        <p>Use this utility to clear browser storage data for CertChain. This is useful for development and testing
+            purposes when you want to start with a clean slate.</p>
 
-        <div class="warning">
-            <strong>⚠️ Warning:</strong> This will clear all locally stored certificate data and user sessions.
+        <div>
+            <h2>Clear Options</h2>
+            <button id="clearLocalStorage">Clear LocalStorage</button>
+            <button id="clearSessionStorage">Clear SessionStorage</button>
+            <button id="clearCookies" class="danger">Clear Cookies</button>
+            <button id="clearAll" class="danger">Clear ALL Storage</button>
         </div>
 
-        <div id="status"></div>
-
-        <button class="button" onclick="clearStorage()">Clear Local Storage</button>
-
-        <div class="next-steps">
-            <h3>Next Steps After Clearing:</h3>
-            <ol>
-                <li><strong>Deploy your new smart contract</strong></li>
-                <li><strong>Update contract address</strong> in <code>.env.local</code></li>
-                <li><strong>Restart the development server</strong></li>
-                <li><strong>Connect your wallet</strong> to get assigned roles</li>
-                <li><strong>Start issuing certificates</strong> with the new contract</li>
-            </ol>
+        <div class="result" id="result">
+            <p>Click a button above to clear storage.</p>
         </div>
+    </div>
 
-        <a href="/" class="button">Return to Dashboard</a>
+    <div class="container">
+        <h2>Current Storage Contents</h2>
+        <h3>LocalStorage</h3>
+        <pre id="localStorageContent"></pre>
+
+        <h3>SessionStorage</h3>
+        <pre id="sessionStorageContent"></pre>
+
+        <h3>Cookies</h3>
+        <pre id="cookiesContent"></pre>
     </div>
 
     <script>
-        function clearStorage() {
+        // Function to display storage contents
+        function displayStorageContents() {
+            // Display LocalStorage
+            const localStorageContent = document.getElementById('localStorageContent');
             try {
-                // Clear localStorage
-                localStorage.clear();
-
-                // Clear sessionStorage
-                sessionStorage.clear();
-
-                // Clear indexedDB (if any)
-                if ('indexedDB' in window) {
-                    indexedDB.databases().then(databases => {
-                        databases.forEach(db => {
-                            indexedDB.deleteDatabase(db.name);
-                        });
-                    }).catch(err => console.log('IndexedDB cleanup failed:', err));
+                const localStorageItems = {};
+                for (let i = 0; i < localStorage.length; i++) {
+                    const key = localStorage.key(i);
+                    try {
+                        // Try to parse as JSON for better display
+                        const value = JSON.parse(localStorage.getItem(key));
+                        localStorageItems[key] = value;
+                    } catch (e) {
+                        // If not JSON, store as string
+                        localStorageItems[key] = localStorage.getItem(key);
+                    }
                 }
+                localStorageContent.textContent = localStorage.length === 0 ?
+                    "No items in LocalStorage" :
+                    JSON.stringify(localStorageItems, null, 2);
+            } catch (e) {
+                localStorageContent.textContent = `Error accessing LocalStorage: ${e.message}`;
+            }
 
-                document.getElementById('status').innerHTML = `
-                    <div class="success">
-                        ✅ Local storage cleared successfully!<br>
-                        <small>localStorage, sessionStorage, and any cached data have been removed.</small>
-                    </div>
-                `;
+            // Display SessionStorage
+            const sessionStorageContent = document.getElementById('sessionStorageContent');
+            try {
+                const sessionStorageItems = {};
+                for (let i = 0; i < sessionStorage.length; i++) {
+                    const key = sessionStorage.key(i);
+                    try {
+                        const value = JSON.parse(sessionStorage.getItem(key));
+                        sessionStorageItems[key] = value;
+                    } catch (e) {
+                        sessionStorageItems[key] = sessionStorage.getItem(key);
+                    }
+                }
+                sessionStorageContent.textContent = sessionStorage.length === 0 ?
+                    "No items in SessionStorage" :
+                    JSON.stringify(sessionStorageItems, null, 2);
+            } catch (e) {
+                sessionStorageContent.textContent = `Error accessing SessionStorage: ${e.message}`;
+            }
 
-                console.log('✅ Storage cleanup completed');
-
-            } catch (error) {
-                document.getElementById('status').innerHTML = `
-                    <div style="color: red;">
-                        ❌ Error clearing storage: ${error.message}
-                    </div>
-                `;
-                console.error('Storage cleanup failed:', error);
+            // Display Cookies
+            const cookiesContent = document.getElementById('cookiesContent');
+            try {
+                const cookiesObj = {};
+                document.cookie.split(';').forEach(cookie => {
+                    if (cookie.trim()) {
+                        const [key, value] = cookie.trim().split('=');
+                        cookiesObj[key] = value;
+                    }
+                });
+                cookiesContent.textContent = Object.keys(cookiesObj).length === 0 ?
+                    "No cookies found" :
+                    JSON.stringify(cookiesObj, null, 2);
+            } catch (e) {
+                cookiesContent.textContent = `Error accessing Cookies: ${e.message}`;
             }
         }
 
-        // Auto-run cleanup if ?auto=true parameter is present
-        if (new URLSearchParams(window.location.search).get('auto') === 'true') {
-            clearStorage();
-        }
+        // Clear LocalStorage
+        document.getElementById('clearLocalStorage').addEventListener('click', function () {
+            try {
+                const count = localStorage.length;
+                localStorage.clear();
+                document.getElementById('result').innerHTML = `
+                    <p class="success">✅ LocalStorage cleared successfully!</p>
+                    <p>Removed ${count} item(s) from LocalStorage.</p>
+                    <p>You should now <a href="/">return to the application</a> and reload the page.</p>
+                `;
+                displayStorageContents();
+            } catch (e) {
+                document.getElementById('result').innerHTML = `
+                    <p class="error">❌ Error clearing LocalStorage: ${e.message}</p>
+                `;
+            }
+        });
+
+        // Clear SessionStorage
+        document.getElementById('clearSessionStorage').addEventListener('click', function () {
+            try {
+                const count = sessionStorage.length;
+                sessionStorage.clear();
+                document.getElementById('result').innerHTML = `
+                    <p class="success">✅ SessionStorage cleared successfully!</p>
+                    <p>Removed ${count} item(s) from SessionStorage.</p>
+                    <p>You should now <a href="/">return to the application</a> and reload the page.</p>
+                `;
+                displayStorageContents();
+            } catch (e) {
+                document.getElementById('result').innerHTML = `
+                    <p class="error">❌ Error clearing SessionStorage: ${e.message}</p>
+                `;
+            }
+        });
+
+        // Clear Cookies
+        document.getElementById('clearCookies').addEventListener('click', function () {
+            try {
+                const cookies = document.cookie.split(";");
+                let count = 0;
+
+                for (let i = 0; i < cookies.length; i++) {
+                    const cookie = cookies[i];
+                    const eqPos = cookie.indexOf("=");
+                    const name = eqPos > -1 ? cookie.substring(0, eqPos).trim() : cookie.trim();
+                    if (name) {
+                        document.cookie = name + "=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/";
+                        count++;
+                    }
+                }
+
+                document.getElementById('result').innerHTML = `
+                    <p class="success">✅ Cookies cleared successfully!</p>
+                    <p>Removed ${count} cookie(s).</p>
+                    <p>You should now <a href="/">return to the application</a> and reload the page.</p>
+                `;
+                displayStorageContents();
+            } catch (e) {
+                document.getElementById('result').innerHTML = `
+                    <p class="error">❌ Error clearing Cookies: ${e.message}</p>
+                `;
+            }
+        });
+
+        // Clear All Storage
+        document.getElementById('clearAll').addEventListener('click', function () {
+            try {
+                const localCount = localStorage.length;
+                const sessionCount = sessionStorage.length;
+
+                localStorage.clear();
+                sessionStorage.clear();
+
+                const cookies = document.cookie.split(";");
+                let cookieCount = 0;
+
+                for (let i = 0; i < cookies.length; i++) {
+                    const cookie = cookies[i];
+                    const eqPos = cookie.indexOf("=");
+                    const name = eqPos > -1 ? cookie.substring(0, eqPos).trim() : cookie.trim();
+                    if (name) {
+                        document.cookie = name + "=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/";
+                        cookieCount++;
+                    }
+                }
+
+                document.getElementById('result').innerHTML = `
+                    <p class="success">✅ All storage cleared successfully!</p>
+                    <ul>
+                        <li>Removed ${localCount} item(s) from LocalStorage</li>
+                        <li>Removed ${sessionCount} item(s) from SessionStorage</li>
+                        <li>Removed ${cookieCount} cookie(s)</li>
+                    </ul>
+                    <p>You should now <a href="/">return to the application</a> and reload the page.</p>
+                `;
+                displayStorageContents();
+            } catch (e) {
+                document.getElementById('result').innerHTML = `
+                    <p class="error">❌ Error clearing storage: ${e.message}</p>
+                `;
+            }
+        });
+
+        // Initialize display
+        displayStorageContents();
     </script>
 </body>
 

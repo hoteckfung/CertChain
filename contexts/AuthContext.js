@@ -460,18 +460,7 @@ export function AuthProvider({ children }) {
         localStorage.removeItem("blockchainRoles");
       }
 
-      // Log logout activity (fire and forget)
-      if (user?.walletAddress) {
-        fetch("/api/activity/log", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            type: "USER_LOGOUT",
-            walletAddress: user.walletAddress,
-            details: "User disconnected wallet",
-          }),
-        }).catch(console.warn);
-      }
+      // User logout logging was removed per user request
 
       // Note: We don't need to explicitly disconnect from MetaMask as this would
       // require user confirmation. Instead, we just clear our local state.
