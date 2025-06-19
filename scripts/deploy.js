@@ -131,33 +131,31 @@ async function main() {
     console.log("   (This wallet will have admin privileges)");
     console.log("");
 
-    // Check if .env.local needs updating
+    // Check if .env needs updating
     try {
       const fs = require("fs");
       const path = require("path");
-      const envPath = path.join(process.cwd(), ".env.local");
+      const envPath = path.join(process.cwd(), ".env");
 
       if (fs.existsSync(envPath)) {
         const envContent = fs.readFileSync(envPath, "utf8");
         if (!envContent.includes(contractAddress)) {
           console.log(
-            "⚠️  Your .env.local file needs to be updated with the new contract address."
+            "⚠️  Your .env file needs to be updated with the new contract address."
           );
           console.log(
             "   Run the update command above to do this automatically."
           );
         } else {
-          console.log(
-            "✅ Your .env.local already contains this contract address."
-          );
+          console.log("✅ Your .env already contains this contract address.");
         }
       } else {
         console.log(
-          "⚠️  .env.local file not found. Make sure to create it with the contract address."
+          "⚠️  .env file not found. Make sure to create it with the contract address."
         );
       }
     } catch (error) {
-      console.log("⚠️  Could not check .env.local file:", error.message);
+      console.log("⚠️  Could not check .env file:", error.message);
     }
 
     console.log("");
@@ -173,7 +171,7 @@ async function main() {
     console.error("");
     console.error("🔧 Troubleshooting:");
     console.error("- Ensure Ganache GUI is running on http://127.0.0.1:7545");
-    console.error("- Check that DEPLOYER_PRIVATE_KEY is set in .env.local");
+    console.error("- Check that DEPLOYER_PRIVATE_KEY is set in .env");
     console.error("- Verify the deployer account has sufficient ETH balance");
     console.error(
       "- Make sure the network configuration in hardhat.config.js is correct"

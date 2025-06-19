@@ -39,7 +39,22 @@ export default async function handler(req, res) {
     // Get environment variables
     const privateKey = process.env.SERVER_WALLET_PRIVATE_KEY;
     const contractAddress = process.env.NEXT_PUBLIC_CONTRACT_ADDRESS;
-    const rpcUrl = process.env.NEXT_PUBLIC_RPC_URL || "http://127.0.0.1:8545";
+
+    // Determine if running in Docker container and choose appropriate RPC URL
+    const isInDocker =
+      process.env.NODE_ENV === "production" || process.env.DOCKER_CONTAINER;
+    let rpcUrl;
+
+    if (isInDocker && process.env.SERVER_RPC_URL) {
+      rpcUrl = process.env.SERVER_RPC_URL;
+    } else if (process.env.NEXT_PUBLIC_RPC_URL) {
+      rpcUrl = process.env.NEXT_PUBLIC_RPC_URL;
+    } else {
+      rpcUrl = "http://127.0.0.1:7545"; // Default fallback
+    }
+
+    console.log(`🔍 Environment: ${isInDocker ? "Docker" : "Local"}`);
+    console.log(`🔗 Using RPC URL: ${rpcUrl}`);
 
     if (!privateKey) {
       return res.status(500).json({

@@ -81,7 +81,7 @@ npm install
 2. Click the **🔑 key icon** next to the first account
 3. **Copy the Private Key** (starts with `0x`)
 4. **Copy the Account Address** (the public address)
-5. **Keep these safe** - you'll need them for `.env.local`
+5. **Keep these safe** - you'll need them for `.env`
 
 **✅ Verification:** Your Ganache should show:
 
@@ -175,9 +175,9 @@ curl "http://127.0.0.1:8081/ipfs/"
 
 ## **Step 5: Create Environment Configuration (CRITICAL)**
 
-### **5.1 Create .env.local File**
+### **5.1 Create .env File**
 
-Create a `.env.local` file in the project root directory with the following configuration:
+Create a `.env` file in the project root directory with the following configuration:
 
 ```env
 # MySQL Configuration (for Docker)
@@ -287,7 +287,29 @@ docker-compose logs mysql
    - You should see `certchain` database
    - If not, the container is still initializing - wait longer
 
-### **7.4 Start Web Application**
+### **7.4 Setup Database Tables**
+
+After the database is running, you need to create the required tables using the provided SQL script:
+
+1. **Execute Database Setup Script:**
+
+   - In phpMyAdmin (http://localhost:8080), click on the `certchain` database
+   - Click the **"SQL"** tab at the top
+   - Copy the contents of `scripts/database_setup.sql` and paste into the SQL query box
+   - Click **"Go"** to execute the script
+
+2. **Verify Tables Created:**
+   - You should see tables: `users`, `certificates`, `activity_logs`, `user_sessions`
+   - The script will show confirmation messages for successful setup
+
+**Alternative method using command line:**
+
+```bash
+# Execute the SQL script directly
+docker-compose exec mysql mysql -u certchain_user -pcertchain_password certchain < scripts/database_setup.sql
+```
+
+### **7.5 Start Web Application**
 
 ```bash
 # Start the web application
@@ -299,7 +321,7 @@ docker-compose logs webapp
 # Wait for application to be ready (about 60 seconds)
 ```
 
-### **7.5 Verify Application Status**
+### **7.6 Verify Application Status**
 
 ```bash
 # Test application health
@@ -313,6 +335,7 @@ curl http://localhost:3000/api/health
 - phpMyAdmin accessible at: http://localhost:8080
 - Web application accessible at: http://localhost:3000
 - Health endpoint responds: http://localhost:3000/api/health
+- Database tables created successfully
 
 ---
 
@@ -349,7 +372,7 @@ Transaction hash: 0xabc123...
 ### **8.3 Update Contract Address in Configuration**
 
 1. **Copy the contract address** from the deployment output
-2. **Open `.env.local`** in a text editor
+2. **Open `.env`** in a text editor
 3. **Replace** `NEXT_PUBLIC_CONTRACT_ADDRESS=0x0000000000000000000000000000000000000000`
 4. **With** `NEXT_PUBLIC_CONTRACT_ADDRESS=0xYourActualContractAddress`
 5. **Save the file**
@@ -374,7 +397,7 @@ docker-compose logs webapp
 **✅ Verification:**
 
 - Contract successfully deployed to Ganache
-- `.env.local` contains the actual contract address
+  - `.env` contains the actual contract address
 - Application restarted successfully
 
 ---
@@ -450,6 +473,9 @@ docker-compose ps
 docker-compose restart webapp
 docker-compose restart mysql
 
+# Rebuild and restart containers (after code changes)
+docker-compose up -d --build
+
 # Stop all services
 docker-compose down
 
@@ -523,16 +549,16 @@ After successful manual setup, your CertChain system will be available at:
 
 ### **Common Issues & Solutions**
 
-| Issue                              | Symptoms                        | Manual Solution                                                    |
-| ---------------------------------- | ------------------------------- | ------------------------------------------------------------------ |
-| **Ganache not responding**         | Contract deployment fails       | Restart Ganache GUI, verify port 7545, check private key           |
-| **IPFS not connecting**            | Certificate uploads fail        | Restart IPFS Desktop, verify ports 5001/8081                       |
-| **Docker containers not starting** | Services fail to start          | Check Docker Desktop is running, verify ports available            |
-| **Database connection errors**     | phpMyAdmin can't connect        | Wait 60 seconds for MySQL startup, check docker-compose logs mysql |
-| **Contract address not updating**  | Frontend shows old/zero address | Manually edit `.env.local`, restart webapp container               |
-| **MetaMask transaction failures**  | "Chain ID mismatch" errors      | Verify Ganache network added correctly, Chain ID = 1337            |
-| **Application health check fails** | API endpoints not responding    | Check webapp container logs, verify all services running           |
-| **Certificate images not loading** | Broken images in dashboard      | Verify IPFS Desktop running and connected, check gateway port 8081 |
+| Issue                              | Symptoms                        | Manual Solution                                                                                             |
+| ---------------------------------- | ------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| **Ganache not responding**         | Contract deployment fails       | Restart Ganache GUI, verify port 7545, check private key                                                    |
+| **IPFS not connecting**            | Certificate uploads fail        | Restart IPFS Desktop, verify ports 5001/8081                                                                |
+| **Docker containers not starting** | Services fail to start          | Check Docker Desktop is running, verify ports available, try rebuilding with `docker-compose up -d --build` |
+| **Database connection errors**     | phpMyAdmin can't connect        | Wait 60 seconds for MySQL startup, check docker-compose logs mysql                                          |
+| **Contract address not updating**  | Frontend shows old/zero address | Manually edit `.env`, restart webapp container                                                              |
+| **MetaMask transaction failures**  | "Chain ID mismatch" errors      | Verify Ganache network added correctly, Chain ID = 1337                                                     |
+| **Application health check fails** | API endpoints not responding    | Check webapp container logs, verify all services running                                                    |
+| **Certificate images not loading** | Broken images in dashboard      | Verify IPFS Desktop running and connected, check gateway port 8081                                          |
 
 ### **Complete System Reset (Manual)**
 
@@ -698,7 +724,7 @@ npx hardhat clean
 
    - Frontend: Edit files in `pages/`, `components/`, `styles/`
    - Smart Contracts: Edit files in `contracts/`
-   - Database: Use phpMyAdmin at http://localhost:8080
+   - Database: Use phpMyAdmin at http://localhost:8080 or modify `scripts/database_setup.sql`
 
 4. **Test Changes:**
 
@@ -777,7 +803,7 @@ For production environments, update these configurations:
 
 ### **1. Environment Configuration**
 
-Update your `.env.local` for production:
+Update your `.env` for production:
 
 ```env
 # Blockchain Configuration

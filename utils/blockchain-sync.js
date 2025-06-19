@@ -3,7 +3,19 @@ import mysql from "./mysql";
 
 // Contract configuration - should match your contract.js
 const CONTRACT_ADDRESS = process.env.NEXT_PUBLIC_CONTRACT_ADDRESS;
-const RPC_URL = process.env.NEXT_PUBLIC_RPC_URL || "http://127.0.0.1:7545";
+
+// Determine if running in Docker container and choose appropriate RPC URL
+const isInDocker =
+  process.env.NODE_ENV === "production" || process.env.DOCKER_CONTAINER;
+let RPC_URL;
+
+if (isInDocker && process.env.SERVER_RPC_URL) {
+  RPC_URL = process.env.SERVER_RPC_URL;
+} else if (process.env.NEXT_PUBLIC_RPC_URL) {
+  RPC_URL = process.env.NEXT_PUBLIC_RPC_URL;
+} else {
+  RPC_URL = "http://127.0.0.1:7545"; // Default fallback
+}
 
 // Contract ABI - events only
 const CERTIFICATE_EVENTS_ABI = [
@@ -34,7 +46,7 @@ export function startBlockchainSync() {
 
     console.log("🚀 Starting blockchain event listeners...");
     console.log("📄 Contract:", CONTRACT_ADDRESS);
-    console.log("🌐 RPC:", RPC_URL);
+    console.log(`🌐 RPC: ${RPC_URL} (${isInDocker ? "Docker" : "Local"})`);
 
     // Listen for certificate issuance
     contract.on(

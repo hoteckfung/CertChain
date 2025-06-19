@@ -188,17 +188,6 @@ contract CertificateNFT is ERC721, ERC721URIStorage, AccessControl, Pausable {
     }
 
     /**
-     * @dev Get certificate count for a user
-     * @param user Address of the user
-     * @return Number of certificates owned by the user
-     */
-    function getUserCertificateCount(
-        address user
-    ) public view returns (uint256) {
-        return userCertificateCount[user];
-    }
-
-    /**
      * @dev Revoke a certificate (admin or issuer only)
      * @param tokenId Token ID of the certificate to revoke
      */
@@ -222,26 +211,6 @@ contract CertificateNFT is ERC721, ERC721URIStorage, AccessControl, Pausable {
      */
     function getTotalCertificates() public view returns (uint256) {
         return _tokenIdCounter;
-    }
-
-    /**
-     * @dev Grant admin role to an address (super admin only)
-     * @param account Address to grant admin role
-     */
-    function grantAdminRole(
-        address account
-    ) public onlyRole(DEFAULT_ADMIN_ROLE) {
-        _grantRole(ADMIN_ROLE, account);
-    }
-
-    /**
-     * @dev Revoke admin role from an address (super admin only)
-     * @param account Address to revoke admin role
-     */
-    function revokeAdminRole(
-        address account
-    ) public onlyRole(DEFAULT_ADMIN_ROLE) {
-        _revokeRole(ADMIN_ROLE, account);
     }
 
     /**

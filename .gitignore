@@ -34,7 +34,10 @@ certchain/cache-zk/
 node_modules/
 
 # Environment variables
-.env
+!.env
+
+# Health check files
+health*.json
 
 # Editor directories and files
 .idea
