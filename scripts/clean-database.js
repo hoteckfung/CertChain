@@ -15,8 +15,23 @@
  */
 
 // Load environment variables
-require("dotenv").config({ path: ".env.local" });
+require("dotenv").config({ path: ".env" });
 const mysql = require("mysql2/promise");
+
+// Helper function to get database configuration
+function getDatabaseConfig() {
+  // Use Docker MySQL settings if no environment overrides are provided
+  return {
+    host: process.env.DB_HOST || process.env.MYSQL_HOST || "localhost",
+    port: parseInt(process.env.DB_PORT || "3307"), // Docker MySQL port
+    user: process.env.DB_USER || process.env.MYSQL_USER || "certchain_user", // Docker MySQL user
+    password:
+      process.env.DB_PASSWORD ||
+      process.env.MYSQL_PASSWORD ||
+      "certchain_password", // Docker MySQL password
+    database: process.env.DB_NAME || process.env.MYSQL_DATABASE || "certchain",
+  };
+}
 
 async function forceCleanDatabase() {
   let connection;
@@ -25,13 +40,7 @@ async function forceCleanDatabase() {
     console.log("🔌 Establishing direct database connection...");
 
     // Get database config from environment
-    const dbConfig = {
-      host: process.env.DB_HOST || "localhost",
-      port: parseInt(process.env.DB_PORT || "3306"),
-      user: process.env.DB_USER || "root",
-      password: process.env.DB_PASSWORD || "mysql",
-      database: process.env.DB_NAME || "certchain",
-    };
+    const dbConfig = getDatabaseConfig();
 
     console.log(
       `🔧 Connecting to database: ${dbConfig.database} on ${dbConfig.host}:${dbConfig.port}`
@@ -181,12 +190,15 @@ async function forceCleanDatabase() {
   } catch (error) {
     console.error("❌ Database clean failed:", error);
     console.error("\n🔧 Troubleshooting:");
-    console.error("- Check your database connection settings in .env.local");
+    console.error("- Check your database connection settings in .env");
     console.error(
       "- Ensure Docker containers are running: docker-compose up -d"
     );
     console.error(
-      "- Verify MySQL is accessible: docker exec certchain-mysql mysql -u root -pmysql -e 'SHOW DATABASES;'"
+      "- Verify MySQL is accessible on port 3307: docker exec certchain-mysql mysql -u certchain_user -pcertchain_password -e 'SHOW DATABASES;'"
+    );
+    console.error(
+      "- Or test as root: docker exec certchain-mysql mysql -u root -pmysql -e 'SHOW DATABASES;'"
     );
     console.error(
       "- Check database user permissions: make sure your user has DELETE privileges"
@@ -208,13 +220,7 @@ async function cleanCertificatesOnly() {
     console.log("🔌 Establishing direct database connection...");
 
     // Get database config from environment
-    const dbConfig = {
-      host: process.env.DB_HOST || "localhost",
-      port: parseInt(process.env.DB_PORT || "3306"),
-      user: process.env.DB_USER || "root",
-      password: process.env.DB_PASSWORD || "mysql",
-      database: process.env.DB_NAME || "certchain",
-    };
+    const dbConfig = getDatabaseConfig();
 
     console.log(
       `🔧 Connecting to database: ${dbConfig.database} on ${dbConfig.host}:${dbConfig.port}`

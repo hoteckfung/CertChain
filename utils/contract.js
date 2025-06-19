@@ -8,7 +8,6 @@ const CERTIFICATE_NFT_ABI = [
   "function verifyCertificate(string ipfsHash) view returns (bool exists, bool isValid, tuple(uint256 tokenId, address recipient, address issuer, string ipfsHash, string certificateType, string recipientName, string issuerName, uint256 issueDate, bool isValid) certificate)",
   "function verifyCertificateById(uint256 tokenId) view returns (bool exists, bool isValid, tuple(uint256 tokenId, address recipient, address issuer, string ipfsHash, string certificateType, string recipientName, string issuerName, uint256 issueDate, bool isValid) certificate)",
   "function getUserCertificates(address user) view returns (tuple(uint256 tokenId, address recipient, address issuer, string ipfsHash, string certificateType, string recipientName, string issuerName, uint256 issueDate, bool isValid)[])",
-  "function getUserCertificateCount(address user) view returns (uint256)",
   "function revokeCertificate(uint256 tokenId)",
   "function getTotalCertificates() view returns (uint256)",
 
@@ -36,15 +35,17 @@ const CERTIFICATE_NFT_ABI = [
 
 // Contract configuration
 const CONTRACT_CONFIG = {
-  // Update these after deployment
-  address: process.env.NEXT_PUBLIC_CONTRACT_ADDRESS || "0x...", // Deploy and set this
-  chainId: process.env.NEXT_PUBLIC_CHAIN_ID || 31337, // Hardhat local by default
-  rpcUrl: process.env.NEXT_PUBLIC_RPC_URL || "http://127.0.0.1:8545",
+  // Contract address from environment variables
+  address: process.env.NEXT_PUBLIC_CONTRACT_ADDRESS,
+  chainId: parseInt(process.env.NEXT_PUBLIC_CHAIN_ID) || 31337, // Hardhat local by default
+  rpcUrl: process.env.NEXT_PUBLIC_RPC_URL || "http://127.0.0.1:7545",
   // Server-side RPC URL for Docker environments
   serverRpcUrl:
     process.env.SERVER_RPC_URL ||
     process.env.NEXT_PUBLIC_RPC_URL ||
-    "http://127.0.0.1:8545",
+    "http://127.0.0.1:7545",
+  // Environment detection
+  isDocker: process.env.NODE_ENV === "production" && process.env.SERVER_RPC_URL,
 };
 
 /**
@@ -52,13 +53,26 @@ const CONTRACT_CONFIG = {
  * Uses server-side RPC URL when running on server, client-side when in browser
  */
 export function getContractRead() {
+  // Validate contract address is set
+  if (!CONTRACT_CONFIG.address) {
+    throw new Error(
+      "Contract address not configured. Please set NEXT_PUBLIC_CONTRACT_ADDRESS environment variable."
+    );
+  }
+
   // Determine if we're running on server or client
   const isServer = typeof window === "undefined";
   const rpcUrl = isServer
     ? CONTRACT_CONFIG.serverRpcUrl
     : CONTRACT_CONFIG.rpcUrl;
 
-  const provider = new ethers.JsonRpcProvider(rpcUrl);
+  // Create provider with specific network config to prevent ENS resolution
+  const provider = new ethers.JsonRpcProvider(rpcUrl, {
+    chainId: CONTRACT_CONFIG.chainId,
+    name: "ganache",
+    ensAddress: null, // Disable ENS resolution
+  });
+
   return new ethers.Contract(
     CONTRACT_CONFIG.address,
     CERTIFICATE_NFT_ABI,
@@ -71,6 +85,13 @@ export function getContractRead() {
  * Requires MetaMask or similar wallet connection
  */
 export async function getContractWrite() {
+  // Validate contract address is set
+  if (!CONTRACT_CONFIG.address) {
+    throw new Error(
+      "Contract address not configured. Please set NEXT_PUBLIC_CONTRACT_ADDRESS environment variable."
+    );
+  }
+
   if (typeof window === "undefined" || !window.ethereum) {
     throw new Error(
       "MetaMask not found. Please install MetaMask to interact with the contract."
@@ -814,20 +835,68 @@ export const checkUserRoles = async (address) => {
       throw new Error("Invalid address: address must be a string");
     }
 
-    // Check if it's a valid Ethereum address format
-    if (!ethers.isAddress(address)) {
+    // Trim and normalize the address
+    const normalizedAddress = address.trim();
+
+    // Check if it's a valid Ethereum address format (must start with 0x and be 42 chars)
+    if (
+      !normalizedAddress.startsWith("0x") ||
+      normalizedAddress.length !== 42
+    ) {
+      throw new Error(
+        "Invalid address: must be a valid Ethereum address starting with 0x"
+      );
+    }
+
+    // Double-check with ethers
+    if (!ethers.isAddress(normalizedAddress)) {
       throw new Error("Invalid address: not a valid Ethereum address format");
     }
 
+    // Log the attempt for debugging
+    console.log("🔍 Checking roles for address:", normalizedAddress);
+
     const contract = getContractRead();
-    const isAdmin = await contract.isAdmin(address);
-    const isIssuer = await contract.isIssuer(address);
+
+    // Add timeout for contract calls to prevent hanging
+    const timeoutPromise = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error("Contract call timeout")), 30000)
+    );
+
+    const rolePromise = Promise.all([
+      contract.isAdmin(normalizedAddress),
+      contract.isIssuer(normalizedAddress),
+    ]);
+
+    const [isAdmin, isIssuer] = await Promise.race([
+      rolePromise,
+      timeoutPromise,
+    ]);
+
+    console.log("🔍 Role check results:", {
+      address: normalizedAddress,
+      isAdmin,
+      isIssuer,
+    });
+
     return { success: true, isAdmin, isIssuer };
   } catch (error) {
-    console.error("Error checking roles:", error);
+    console.error("❌ Error checking roles:", error);
+
+    // Provide more specific error messages
+    let errorMessage = error.message;
+    if (error.message.includes("network does not support ENS")) {
+      errorMessage =
+        "Network configuration error: ENS resolution not supported on this network";
+    } else if (error.message.includes("timeout")) {
+      errorMessage = "Contract call timeout - check network connection";
+    } else if (error.code === "NETWORK_ERROR") {
+      errorMessage = "Network error - check if blockchain node is running";
+    }
+
     return {
       success: false,
-      error: error.message,
+      error: errorMessage,
       isAdmin: false,
       isIssuer: false,
     };

@@ -50,8 +50,8 @@ function updateContractAddress(newAddress, deployerAddress = null) {
     console.error("❌ Error updating docker-compose.yml:", error.message);
   }
 
-  // Update .env.local
-  const envPath = ".env.local";
+  // Update .env
+  const envPath = ".env";
   try {
     let envContent = fs.readFileSync(envPath, "utf8");
 
@@ -74,9 +74,9 @@ function updateContractAddress(newAddress, deployerAddress = null) {
     }
 
     fs.writeFileSync(envPath, envContent);
-    console.log("✅ Updated .env.local");
+    console.log("✅ Updated .env");
   } catch (error) {
-    console.error("❌ Error updating .env.local:", error.message);
+    console.error("❌ Error updating .env:", error.message);
   }
 
   console.log("🎉 Contract address update complete!");

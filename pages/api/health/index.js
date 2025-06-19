@@ -10,6 +10,7 @@ export default async function handler(req, res) {
     timestamp: new Date().toISOString(),
     version: process.env.npm_package_version || "1.0.0",
     environment: process.env.NODE_ENV || "development",
+    debug: "UPDATED_CODE_VERSION_2.0", // This should appear if code is reloading
     services: {
       database: { status: "unknown", message: "" },
       blockchain: { status: "unknown", message: "" },
@@ -48,13 +49,30 @@ export default async function handler(req, res) {
 
   // Test Blockchain Connection
   try {
-    // Use SERVER_RPC_URL for server-side calls, fallback to NEXT_PUBLIC_RPC_URL
-    const rpcUrl =
-      process.env.SERVER_RPC_URL || process.env.NEXT_PUBLIC_RPC_URL;
+    // Determine if running in Docker container
+    const isInDocker =
+      process.env.NODE_ENV === "production" || process.env.DOCKER_CONTAINER;
+
+    // Choose RPC URL based on environment
+    let rpcUrl;
+    if (isInDocker && process.env.SERVER_RPC_URL) {
+      rpcUrl = process.env.SERVER_RPC_URL;
+    } else if (process.env.NEXT_PUBLIC_RPC_URL) {
+      rpcUrl = process.env.NEXT_PUBLIC_RPC_URL;
+    } else {
+      throw new Error("No RPC URL configured");
+    }
+
     const contractAddress = process.env.NEXT_PUBLIC_CONTRACT_ADDRESS;
 
     if (!rpcUrl || !contractAddress) {
-      throw new Error("Missing blockchain configuration");
+      throw new Error(
+        `Missing blockchain configuration - RPC URL: ${
+          rpcUrl ? "OK" : "MISSING"
+        }, Contract Address: ${contractAddress ? "OK" : "MISSING"}, NODE_ENV: ${
+          process.env.NODE_ENV
+        }, Docker: ${isInDocker ? "YES" : "NO"}`
+      );
     }
 
     // Simple RPC test
@@ -67,6 +85,7 @@ export default async function handler(req, res) {
         params: [],
         id: 1,
       }),
+      timeout: 10000, // 10 second timeout
     });
 
     if (!response.ok) {
@@ -84,8 +103,12 @@ export default async function handler(req, res) {
         data.result,
         16
       )}`,
-      rpcUrl: rpcUrl.includes("localhost") ? rpcUrl : "***protected***",
+      rpcUrl:
+        rpcUrl.includes("localhost") || rpcUrl.includes("127.0.0.1")
+          ? rpcUrl
+          : "***protected***",
       contractAddress,
+      environment: isInDocker ? "docker" : "local",
     };
   } catch (error) {
     health.services.blockchain = {
