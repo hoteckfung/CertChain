@@ -55,6 +55,7 @@ echo    - Node.js (v16+) for smart contract deployment
 echo    - Git for cloning the repository
 echo    - MetaMask browser extension
 echo    - Ganache GUI for local blockchain
+echo    - IPFS Desktop for decentralized certificate storage
 echo.
 echo TYPICAL WORKFLOW FOR NEW USERS:
 echo    1. git clone [repository-url]
@@ -115,13 +116,23 @@ call :check_ganache_with_instructions
 if errorlevel 1 exit /b 1
 
 echo.
+echo Checking IPFS Desktop status...
+call :check_ipfs_with_instructions
+if errorlevel 1 (
+    echo WARNING: IPFS Desktop not properly configured
+    echo CertChain will work, but certificate uploads may fail
+    echo Please set up IPFS Desktop before issuing certificates
+)
+
+echo.
 echo Basic setup complete! 
 echo.
 echo NEXT STEPS:
-echo    1. Set your DEPLOYER_PRIVATE_KEY in .env.local (from Ganache)
-echo    2. Deploy smart contract: npx hardhat run scripts/deploy.js --network ganache
-echo    3. Update config: node scripts/update-contract-address.js [CONTRACT_ADDRESS]
-echo    4. Visit: http://localhost:3000
+echo    1. Set up IPFS Desktop for certificate storage
+echo    2. Set your DEPLOYER_PRIVATE_KEY in .env.local (from Ganache)
+echo    3. Deploy smart contract: npx hardhat run scripts/deploy.js --network ganache
+echo    4. Update config: node scripts/update-contract-address.js [CONTRACT_ADDRESS]
+echo    5. Visit: http://localhost:3000
 echo.
 echo TIP: Use 'scripts\deploy.bat --fresh' for complete automated deployment
 echo      or continue manually with the steps above.
@@ -313,10 +324,49 @@ if not exist "node_modules" (
 )
 echo    OK: NPM dependencies are ready
 
-echo [4/4] Checking MetaMask ^(optional verification^)...
+echo [4/5] Checking MetaMask ^(optional verification^)...
 echo    Make sure MetaMask browser extension is installed
 echo    Get it from: https://metamask.io/
 echo    OK: MetaMask check reminder completed
+
+echo [5/5] Checking IPFS Desktop...
+where ipfs >nul 2>&1
+if errorlevel 1 (
+    echo    WARNING: IPFS command not found ^(IPFS Desktop may not be installed^)
+    echo    Download from: https://desktop.ipfs.io/
+    echo    IPFS Desktop is required for certificate storage
+) else (
+    echo    OK: IPFS command is available
+)
+
+curl -s http://127.0.0.1:5001/api/v0/id >nul 2>&1
+if errorlevel 1 (
+    echo    ERROR: IPFS API not responding on port 5001
+    echo    Make sure IPFS Desktop is running and connected
+    echo    Download from: https://desktop.ipfs.io/
+    echo    IMPORTANT: Change IPFS Gateway port to 8081 to avoid conflict with phpMyAdmin
+    echo        - In IPFS Desktop: Settings → IPFS Config
+    echo        - Change Gateway port from 8080 to 8081
+    echo        - Save and restart IPFS Desktop
+) else (
+    echo    OK: IPFS API is responding
+    REM Check if gateway is on default port 8080 ^(conflict with phpMyAdmin^)
+    curl -s http://127.0.0.1:8080/ipfs/ >nul 2>&1
+    if not errorlevel 1 (
+        echo    WARNING: IPFS Gateway running on port 8080 ^(conflicts with phpMyAdmin^)
+        echo    Please change IPFS Gateway to port 8081:
+        echo        - In IPFS Desktop: Settings → IPFS Config
+        echo        - Change Gateway port from 8080 to 8081
+        echo        - Save and restart IPFS Desktop
+    ) else (
+        curl -s http://127.0.0.1:8081/ipfs/ >nul 2>&1
+        if not errorlevel 1 (
+            echo    OK: IPFS Gateway correctly configured on port 8081
+        ) else (
+            echo    WARNING: IPFS Gateway port unclear, check configuration
+        )
+    )
+)
 echo.
 echo All prerequisites verified successfully!
 exit /b 0
@@ -397,6 +447,43 @@ if errorlevel 1 (
     exit /b 1
 )
 echo    Ganache is running and accessible
+exit /b 0
+
+:check_ipfs_with_instructions
+echo Checking IPFS Desktop connection...
+curl -s http://127.0.0.1:5001/api/v0/id >nul 2>&1
+if errorlevel 1 (
+    echo    Cannot connect to IPFS API on port 5001
+    echo.
+    echo    Please download and start IPFS Desktop:
+    echo       1. Visit: https://desktop.ipfs.io/
+    echo       2. Download and install IPFS Desktop
+    echo       3. Start the application ^(you'll see green "Connected" status^)
+    echo       4. IMPORTANT: Resolve port conflict with phpMyAdmin:
+    echo          - Go to Settings → IPFS Config
+    echo          - Find 'Addresses' section
+    echo          - Change Gateway from '/ip4/127.0.0.1/tcp/8080' to '/ip4/127.0.0.1/tcp/8081'
+    echo          - Save and restart IPFS Desktop
+    echo.
+    echo    Once IPFS Desktop is running and configured, try this command again
+    exit /b 1
+)
+echo    IPFS API is running and accessible
+
+REM Check gateway port configuration
+curl -s http://127.0.0.1:8080/ipfs/ >nul 2>&1
+if not errorlevel 1 (
+    echo    WARNING: IPFS Gateway on port 8080 conflicts with phpMyAdmin
+    echo    Please change to port 8081 in IPFS Desktop settings
+    exit /b 1
+) else (
+    curl -s http://127.0.0.1:8081/ipfs/ >nul 2>&1
+    if not errorlevel 1 (
+        echo    IPFS Gateway correctly configured on port 8081
+    ) else (
+        echo    WARNING: IPFS Gateway not responding - check configuration
+    )
+)
 exit /b 0
 
 :start_docker_services
@@ -492,6 +579,15 @@ call :check_ganache_with_instructions
 if errorlevel 1 exit /b 1
 
 echo.
+echo Step 4.5: Checking IPFS Desktop...
+call :check_ipfs_with_instructions
+if errorlevel 1 (
+    echo WARNING: IPFS Desktop not properly configured
+    echo CertChain will work, but certificate uploads may fail
+    echo Please set up IPFS Desktop before issuing certificates
+)
+
+echo.
 echo Step 5: Deploying smart contract...
 call :deploy_smart_contract_fresh
 if errorlevel 1 exit /b 1
@@ -541,6 +637,7 @@ echo.
 echo YOUR CERTCHAIN SYSTEM IS NOW RUNNING:
 echo    Web Application:     http://localhost:3000
 echo    Database Admin:      http://localhost:8080
+echo    IPFS Gateway:        http://localhost:8081 (if configured)
 echo    Health Check:        http://localhost:3000/api/health
 echo    Storage Cleaner:     http://localhost:3000/clear-storage.html
 echo.
@@ -571,6 +668,8 @@ echo TROUBLESHOOTING:
 echo    - No certificates showing? Clear browser storage at /clear-storage.html
 echo    - Contract errors? Check Ganache is running and wallet is connected
 echo    - Database issues? Try scripts\deploy.bat --clean
+echo    - Certificate upload failures? Check IPFS Desktop is running on port 5001
+echo    - Port conflicts? Make sure IPFS Gateway uses port 8081 (not 8080)
 echo.
 echo For detailed documentation, check the README.md file
 echo.
