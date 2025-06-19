@@ -31,6 +31,7 @@ export default async function handler(req, res) {
         }
       } else if (!getUserError) {
         // Try to create new user
+        // Deployer gets stored as 'holder' in DB but will be treated as admin dynamically
         const newUserData = {
           wallet_address: walletAddress,
           role: userData.role || "holder",
@@ -65,11 +66,17 @@ export default async function handler(req, res) {
     }
 
     // Create user object for session (even if database failed)
+    // Check if this is the deployer address for fallback too
+    const deployerAddress = process.env.DEPLOYER_ADDRESS?.toLowerCase();
+    const isDeployer = walletAddress.toLowerCase() === deployerAddress;
+
     const sessionUser = user || {
       id: `wallet_${walletAddress.slice(2, 8)}`,
       wallet_address: walletAddress,
-      role: userData.role || "holder",
-      permissions: ["view_certificates"],
+      role: isDeployer ? "admin" : userData.role || "holder",
+      permissions: isDeployer
+        ? ["manage_users", "view_certificates", "issue_certificates"]
+        : ["view_certificates"],
     };
 
     // Create session cookie regardless of database status
@@ -88,13 +95,13 @@ export default async function handler(req, res) {
       )}; Path=/; HttpOnly; SameSite=Strict; Max-Age=${24 * 60 * 60}`, // 24 hours
     ]);
 
-    // Log activity if we have a real user ID
-    if (user && user.id && !isBlockchainOnly) {
+    // Log activity if we have a real user ID and user is not an admin
+    if (user && user.id && !isBlockchainOnly && user.role !== "admin") {
       try {
         await mysql.logActivity({
           user_id: user.id,
           action: "user_login",
-          details: `User logged in successfully. Role: ${user.role}`,
+          details: `User logged in successfully.`,
           wallet_address: user.wallet_address,
           category: "authentication",
         });
@@ -122,10 +129,15 @@ export default async function handler(req, res) {
 
     // Even on error, try to set a basic session for blockchain auth
     if (req.body?.walletAddress) {
+      // Check if this is the deployer address for error case too
+      const deployerAddress = process.env.DEPLOYER_ADDRESS?.toLowerCase();
+      const isDeployer =
+        req.body.walletAddress.toLowerCase() === deployerAddress;
+
       const authData = {
         walletAddress: req.body.walletAddress,
         userId: `wallet_${req.body.walletAddress.slice(2, 8)}`,
-        role: req.body?.userData?.role || "holder",
+        role: isDeployer ? "admin" : req.body?.userData?.role || "holder",
         loginTime: new Date().toISOString(),
         blockchainOnly: true,
       };

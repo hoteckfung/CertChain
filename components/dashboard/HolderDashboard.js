@@ -29,6 +29,7 @@ export default function HolderDashboard({ activeTab, user }) {
   const [statusFilter, setStatusFilter] = useState("all");
   const [showCopiedMessage, setShowCopiedMessage] = useState(false);
   const [showQRSection, setShowQRSection] = useState(false);
+  const [originalFormat, setOriginalFormat] = useState(null);
 
   // Load certificates
   useEffect(() => {
@@ -91,6 +92,22 @@ export default function HolderDashboard({ activeTab, user }) {
   const viewCertificate = (cert) => setSelectedCertificate(cert);
   const closeViewer = () => setSelectedCertificate(null);
 
+  // Helper function to get certificate format from MIME type
+  const detectCertificateFormat = async (hash) => {
+    try {
+      const url = getIPFSUrl(hash, true);
+      const response = await fetch(url, { method: "HEAD" });
+      const mimeType = response.headers.get("content-type") || "";
+
+      if (mimeType.includes("pdf")) return "PDF";
+      if (mimeType.includes("jpeg") || mimeType.includes("jpg")) return "JPG";
+      if (mimeType.includes("png")) return "PNG";
+      return "Unknown";
+    } catch (error) {
+      return "Unknown";
+    }
+  };
+
   const handleDownload = async (cert, requestedFormat) => {
     setIsDownloading(true);
     try {
@@ -100,12 +117,209 @@ export default function HolderDashboard({ activeTab, user }) {
         throw new Error("Failed to fetch certificate from IPFS");
 
       const blob = await response.blob();
+      const mimeType = blob.type;
+
+      // Determine the original format of the certificate
+      let originalFormat = "unknown";
+      if (mimeType.includes("pdf")) {
+        originalFormat = "pdf";
+      } else if (mimeType.includes("jpeg") || mimeType.includes("jpg")) {
+        originalFormat = "jpg";
+      } else if (mimeType.includes("png")) {
+        originalFormat = "png";
+      }
+
+      // Check if conversion is needed and possible
+      if (originalFormat === "unknown") {
+        throw new Error("Unable to determine certificate format");
+      }
+
+      let downloadBlob = blob;
+      let actualFormat = originalFormat;
+
+      // Handle format conversion
+      if (requestedFormat !== originalFormat) {
+        if (
+          originalFormat === "pdf" &&
+          (requestedFormat === "jpg" || requestedFormat === "png")
+        ) {
+          // PDF to image conversion using PDF.js
+          try {
+            const pdfUrl = URL.createObjectURL(blob);
+            showInfo("Converting PDF to image format...");
+
+            // Import PDF.js dynamically with CDN worker path for Next.js compatibility
+            const pdfjsLib = await import("pdfjs-dist/build/pdf");
+            pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
+
+            const loadingTask = pdfjsLib.getDocument(pdfUrl);
+            const pdf = await loadingTask.promise;
+            const page = await pdf.getPage(1);
+
+            // Scale for better quality
+            const scale = 2.0;
+            const viewport = page.getViewport({ scale });
+
+            const canvas = document.createElement("canvas");
+            canvas.width = viewport.width;
+            canvas.height = viewport.height;
+            const context = canvas.getContext("2d");
+
+            // For JPG conversion, add white background
+            if (requestedFormat === "jpg") {
+              context.fillStyle = "white";
+              context.fillRect(0, 0, canvas.width, canvas.height);
+            }
+
+            const renderContext = {
+              canvasContext: context,
+              viewport: viewport,
+            };
+
+            await page.render(renderContext).promise;
+
+            // Convert canvas to blob with proper quality
+            downloadBlob = await new Promise((resolve, reject) => {
+              canvas.toBlob(
+                (blob) => {
+                  if (blob) {
+                    resolve(blob);
+                  } else {
+                    reject(new Error("Failed to convert canvas to blob"));
+                  }
+                },
+                `image/${requestedFormat}`,
+                0.95
+              );
+            });
+
+            actualFormat = requestedFormat;
+            URL.revokeObjectURL(pdfUrl);
+            showInfo(
+              `Successfully converted PDF to ${requestedFormat.toUpperCase()}`
+            );
+          } catch (conversionError) {
+            console.error("PDF conversion failed:", conversionError);
+            showWarning(
+              `Cannot convert PDF to ${requestedFormat.toUpperCase()}. Downloading original PDF format. Error: ${
+                conversionError.message
+              }`
+            );
+            actualFormat = originalFormat;
+          }
+        } else if (
+          (originalFormat === "jpg" || originalFormat === "png") &&
+          requestedFormat === "pdf"
+        ) {
+          // Image to PDF conversion using jsPDF
+          try {
+            showInfo("Converting image to PDF format...");
+            const jsPDF = (await import("jspdf")).default;
+
+            // Create image element to get dimensions
+            const img = new Image();
+            const imageUrl = URL.createObjectURL(blob);
+
+            await new Promise((resolve, reject) => {
+              img.onload = resolve;
+              img.onerror = reject;
+              img.src = imageUrl;
+            });
+
+            // Create PDF with image
+            const pdf = new jsPDF({
+              orientation: img.width > img.height ? "landscape" : "portrait",
+              unit: "mm",
+              format: "a4",
+            });
+
+            const pdfWidth = pdf.internal.pageSize.getWidth();
+            const pdfHeight = pdf.internal.pageSize.getHeight();
+            const imgRatio = img.width / img.height;
+            const pdfRatio = pdfWidth / pdfHeight;
+
+            let finalWidth, finalHeight;
+            if (imgRatio > pdfRatio) {
+              finalWidth = pdfWidth;
+              finalHeight = pdfWidth / imgRatio;
+            } else {
+              finalHeight = pdfHeight;
+              finalWidth = pdfHeight * imgRatio;
+            }
+
+            const x = (pdfWidth - finalWidth) / 2;
+            const y = (pdfHeight - finalHeight) / 2;
+
+            pdf.addImage(img, "JPEG", x, y, finalWidth, finalHeight);
+
+            // Get PDF as blob
+            downloadBlob = pdf.output("blob");
+            actualFormat = "pdf";
+            URL.revokeObjectURL(imageUrl);
+          } catch (conversionError) {
+            console.error("Image to PDF conversion failed:", conversionError);
+            showWarning(
+              `Cannot convert ${originalFormat.toUpperCase()} to PDF. Downloading original ${originalFormat.toUpperCase()} format.`
+            );
+            actualFormat = originalFormat;
+          }
+        } else if (
+          (originalFormat === "jpg" && requestedFormat === "png") ||
+          (originalFormat === "png" && requestedFormat === "jpg")
+        ) {
+          // Image format conversion using canvas
+          try {
+            showInfo(
+              `Converting ${originalFormat.toUpperCase()} to ${requestedFormat.toUpperCase()}...`
+            );
+            const img = new Image();
+            const imageUrl = URL.createObjectURL(blob);
+
+            await new Promise((resolve, reject) => {
+              img.onload = resolve;
+              img.onerror = reject;
+              img.src = imageUrl;
+            });
+
+            const canvas = document.createElement("canvas");
+            canvas.width = img.width;
+            canvas.height = img.height;
+            const ctx = canvas.getContext("2d");
+
+            // For JPG conversion, add white background
+            if (requestedFormat === "jpg") {
+              ctx.fillStyle = "white";
+              ctx.fillRect(0, 0, canvas.width, canvas.height);
+            }
+
+            ctx.drawImage(img, 0, 0);
+
+            downloadBlob = await new Promise((resolve) => {
+              canvas.toBlob(resolve, `image/${requestedFormat}`, 0.95);
+            });
+            actualFormat = requestedFormat;
+            URL.revokeObjectURL(imageUrl);
+          } catch (conversionError) {
+            console.error("Image format conversion failed:", conversionError);
+            showWarning(
+              `Cannot convert ${originalFormat.toUpperCase()} to ${requestedFormat.toUpperCase()}. Downloading original format.`
+            );
+            actualFormat = originalFormat;
+          }
+        } else {
+          showWarning(
+            `Format conversion from ${originalFormat.toUpperCase()} to ${requestedFormat.toUpperCase()} is not supported. Downloading original format.`
+          );
+          actualFormat = originalFormat;
+        }
+      }
+
       const filename = `certificate-${cert.title.replace(
         /[^a-zA-Z0-9]/g,
         "_"
-      )}-${cert.id}.${requestedFormat}`;
+      )}-${cert.id}.${actualFormat}`;
 
-      const downloadUrl = window.URL.createObjectURL(blob);
+      const downloadUrl = window.URL.createObjectURL(downloadBlob);
       const link = document.createElement("a");
       link.href = downloadUrl;
       link.download = filename;
@@ -114,7 +328,11 @@ export default function HolderDashboard({ activeTab, user }) {
       document.body.removeChild(link);
       window.URL.revokeObjectURL(downloadUrl);
 
-      showSuccess(`Certificate "${cert.title}" downloaded successfully!`);
+      showSuccess(
+        `Certificate "${
+          cert.title
+        }" downloaded successfully as ${actualFormat.toUpperCase()}!`
+      );
     } catch (error) {
       showError(`Failed to download certificate: ${error.message}`);
     } finally {
@@ -504,7 +722,15 @@ export default function HolderDashboard({ activeTab, user }) {
                 <Button variant="secondary" onClick={closeViewer}>
                   Close
                 </Button>
-                <Button onClick={() => setShareModalOpen(true)}>
+                <Button
+                  onClick={async () => {
+                    setShareModalOpen(true);
+                    setOriginalFormat(null);
+                    const format = await detectCertificateFormat(
+                      selectedCertificate.hash
+                    );
+                    setOriginalFormat(format);
+                  }}>
                   Share Certificate
                 </Button>
               </div>
@@ -526,6 +752,8 @@ export default function HolderDashboard({ activeTab, user }) {
                   onClick={() => {
                     setShareModalOpen(false);
                     setSelectedCertificate(null);
+                    setOriginalFormat(null);
+                    setShowQRSection(false);
                   }}
                   className="text-gray-500 hover:text-gray-700">
                   <svg
@@ -544,9 +772,31 @@ export default function HolderDashboard({ activeTab, user }) {
                 </button>
               </div>
 
-              <p className="mb-6 text-gray-600">
+              <p className="mb-4 text-gray-600">
                 Choose how you want to share your certificate:
               </p>
+
+              {/* Original Format Info */}
+              {originalFormat && (
+                <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                  <div className="flex items-center gap-2">
+                    <i className="bx bx-info-circle text-blue-500"></i>
+                    <span className="text-sm text-blue-800">
+                      Original format: <strong>{originalFormat}</strong>
+                    </span>
+                  </div>
+                  {originalFormat === "PDF" ? (
+                    <p className="text-xs text-blue-600 mt-1">
+                      PDF certificates can only be downloaded in PDF format to
+                      maintain document integrity
+                    </p>
+                  ) : (
+                    <p className="text-xs text-blue-600 mt-1">
+                      Format conversion is automatically handled when needed
+                    </p>
+                  )}
+                </div>
+              )}
 
               {/* Share Format Options */}
               <div className="grid grid-cols-2 gap-4 mb-6">
@@ -556,58 +806,79 @@ export default function HolderDashboard({ activeTab, user }) {
                     color: "text-red-500",
                     label: "PDF",
                     desc: "Download as PDF",
+                    icon: "bx-file",
                   },
                   {
                     format: "jpg",
                     color: "text-blue-500",
                     label: "JPG",
                     desc: "Download as JPG",
+                    icon: "bx-image",
                   },
                   {
                     format: "png",
                     color: "text-green-500",
                     label: "PNG",
                     desc: "Download as PNG",
+                    icon: "bx-image",
                   },
-                ].map(({ format, color, label, desc }) => (
-                  <button
-                    key={format}
-                    onClick={() => handleDownload(selectedCertificate, format)}
-                    className="p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors text-center">
-                    <div className={`${color} mb-2`}>
-                      {format === "pdf" && (
-                        <i className="bx bx-file text-3xl"></i>
+                  {
+                    format: "qr",
+                    color: "text-purple-500",
+                    label: "QR Code",
+                    desc: "Generate QR Code",
+                    icon: "bx-qr",
+                  },
+                ]
+                  .filter(({ format }) => {
+                    // If original format is PDF, only allow PDF and QR Code
+                    if (originalFormat === "PDF") {
+                      return format === "pdf" || format === "qr";
+                    }
+                    // Otherwise, allow all formats
+                    return true;
+                  })
+                  .map(({ format, color, label, desc, icon }) => (
+                    <button
+                      key={format}
+                      onClick={() => {
+                        if (format === "qr") {
+                          setShowQRSection(true);
+                        } else {
+                          handleDownload(selectedCertificate, format);
+                        }
+                      }}
+                      disabled={isDownloading}
+                      className={`p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors text-center relative ${
+                        isDownloading ? "opacity-50 cursor-not-allowed" : ""
+                      }`}>
+                      <div className={`${color} mb-2`}>
+                        <i className={`bx ${icon} text-3xl`}></i>
+                      </div>
+                      <p className="text-sm font-medium">{label}</p>
+                      <p className="text-xs text-gray-500">{desc}</p>
+                      {format !== "qr" && (
+                        <div className="absolute top-2 right-2">
+                          <div
+                            className="w-2 h-2 bg-green-400 rounded-full"
+                            title="Format conversion supported"></div>
+                        </div>
                       )}
-                      {(format === "jpg" || format === "png") && (
-                        <i className="bx bx-image text-3xl"></i>
-                      )}
-                    </div>
-                    <p className="text-sm font-medium">{label}</p>
-                    <p className="text-xs text-gray-500">{desc}</p>
-                  </button>
-                ))}
-
-                <button
-                  onClick={() => setShowQRSection(true)}
-                  className="p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors text-center">
-                  <div className="text-purple-500 mb-2">
-                    <i className="bx bx-qr text-3xl"></i>
-                  </div>
-                  <p className="text-sm font-medium">QR Code</p>
-                  <p className="text-xs text-gray-500">Generate QR Code</p>
-                </button>
+                    </button>
+                  ))}
               </div>
 
               {/* QR Code Section */}
               {showQRSection && (
-                <div className="mb-6">
-                  <div className="flex justify-between items-center mb-3">
-                    <p className="text-sm font-medium text-gray-700">
-                      QR Code & Link
-                    </p>
+                <div className="mb-6 border border-gray-200 rounded-lg p-4 bg-gray-50">
+                  <div className="flex justify-between items-center mb-4">
+                    <h3 className="text-lg font-semibold text-gray-800 flex items-center gap-2">
+                      <i className="bx bx-qr text-purple-500"></i>
+                      QR Code & Share Link
+                    </h3>
                     <button
                       onClick={() => setShowQRSection(false)}
-                      className="text-gray-400 hover:text-gray-600">
+                      className="text-gray-400 hover:text-gray-600 transition-colors">
                       <svg
                         xmlns="http://www.w3.org/2000/svg"
                         className="h-5 w-5"
@@ -624,14 +895,15 @@ export default function HolderDashboard({ activeTab, user }) {
                     </button>
                   </div>
 
+                  {/* Verification Link */}
                   <div className="mb-4">
-                    <label className="block text-xs text-gray-500 mb-1">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
                       Verification Link
                     </label>
                     <div className="flex">
                       <input
                         type="text"
-                        className="flex-grow w-full px-3 py-2 border border-gray-300 rounded-l-md bg-gray-50 text-sm"
+                        className="flex-grow px-3 py-2 border border-gray-300 rounded-l-md bg-white text-sm font-mono"
                         value={getShareLink(selectedCertificate)}
                         readOnly
                       />
@@ -640,19 +912,25 @@ export default function HolderDashboard({ activeTab, user }) {
                           copyToClipboard(getShareLink(selectedCertificate));
                           showInfo("Link copied to clipboard!");
                         }}
-                        className="px-3 py-2 bg-gray-100 text-gray-700 rounded-r-md border border-gray-300 border-l-0 hover:bg-gray-200 text-sm">
+                        className="px-4 py-2 bg-blue-600 text-white rounded-r-md border border-blue-600 hover:bg-blue-700 transition-colors text-sm flex items-center gap-1">
+                        <i className="bx bx-copy text-sm"></i>
                         Copy
                       </button>
                     </div>
                   </div>
 
-                  <div className="flex justify-center p-4 bg-white border border-gray-200 rounded-md mb-4">
+                  {/* QR Code Display */}
+                  <div className="bg-white border border-gray-200 rounded-lg p-6 text-center">
                     <QRCode
                       value={getShareLink(selectedCertificate)}
-                      size={180}
+                      size={200}
                       level="H"
                       includeMargin={true}
+                      className="mx-auto"
                     />
+                    <p className="text-xs text-gray-500 mt-3">
+                      Scan this QR code to verify the certificate
+                    </p>
                   </div>
                 </div>
               )}
@@ -663,6 +941,7 @@ export default function HolderDashboard({ activeTab, user }) {
                   onClick={() => {
                     setShareModalOpen(false);
                     setSelectedCertificate(null);
+                    setOriginalFormat(null);
                     setShowQRSection(false);
                   }}>
                   Close

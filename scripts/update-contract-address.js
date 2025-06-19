@@ -84,7 +84,9 @@ function updateContractAddress(newAddress, deployerAddress = null) {
     console.log("👤 Deployer address set!");
   }
   console.log("📋 Next steps:");
-  console.log("   1. Run cleanup script: node scripts/clean-initial-users.js");
+  console.log(
+    "   1. Clean database (optional): node scripts/clean-database.js"
+  );
   console.log("   2. Rebuild Docker container: docker-compose build webapp");
   console.log("   3. Restart container: docker-compose up -d webapp");
   console.log("   4. Verify health: curl http://localhost:3000/api/health");

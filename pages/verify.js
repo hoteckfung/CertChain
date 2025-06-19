@@ -289,23 +289,7 @@ const VerifyPage = () => {
           hash: hash,
         });
 
-        // Log the verification activity
-        try {
-          await fetch("/api/activity/log", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              type: "VERIFICATION_PERFORMED",
-              walletAddress: "anonymous",
-              details: `Certificate verification: ${verificationMessage}`,
-              ipfsHash: hash,
-            }),
-          });
-        } catch (logError) {
-          console.warn("Failed to log verification activity:", logError);
-        }
+        // Verification activity no longer logged per requirements
 
         if (verificationStatus === "valid") {
           showSuccess(verificationMessage);

@@ -108,7 +108,60 @@ export default function IssuerDashboard({ activeTab, user }) {
   // Load certificates and check blockchain status on component mount
   useEffect(() => {
     checkBlockchainStatus(); // Check blockchain status on component mount
-  }, []);
+    if (user?.walletAddress) {
+      loadIssuerCertificates(user.walletAddress);
+    }
+  }, [user?.walletAddress]);
+
+  // Add a trigger to force refresh certificates periodically
+  useEffect(() => {
+    // Only set up if user is connected
+    if (!user?.walletAddress) return;
+
+    // Refresh certificates every 5 seconds to catch any blockchain updates
+    const intervalId = setInterval(() => {
+      console.log("Refreshing certificates (interval)");
+      loadIssuerCertificates(user.walletAddress);
+    }, 5000);
+
+    return () => clearInterval(intervalId); // Clean up on unmount
+  }, [user?.walletAddress]);
+
+  // Function to load issuer certificates from database
+  const loadIssuerCertificates = async (walletAddress) => {
+    try {
+      console.log("Loading certificates for issuer:", walletAddress);
+      const response = await fetch(`/api/certificates/issuer/${walletAddress}`);
+
+      if (response.ok) {
+        const data = await response.json();
+        console.log("Certificates loaded:", data);
+        if (data.success && data.certificates) {
+          // Make sure certificates have correct capitalized status
+          const fixedCertificates = data.certificates.map((cert) => ({
+            ...cert,
+            status:
+              cert.status === "revoked" || cert.status === "Revoked"
+                ? "Revoked"
+                : "Issued",
+          }));
+          console.log("Setting certificates with status:", fixedCertificates);
+          setIssuedCertificates(fixedCertificates);
+        } else {
+          setIssuedCertificates([]);
+        }
+      } else if (response.status === 404) {
+        // No certificates found for this issuer - this is normal
+        setIssuedCertificates([]);
+      } else {
+        console.error("Failed to load issuer certificates:", response.status);
+        setIssuedCertificates([]);
+      }
+    } catch (error) {
+      console.error("Error loading issuer certificates:", error);
+      setIssuedCertificates([]);
+    }
+  };
 
   const checkWalletConnection = async () => {
     if (typeof window !== "undefined" && window.ethereum) {
@@ -301,6 +354,10 @@ export default function IssuerDashboard({ activeTab, user }) {
           );
         } else {
           console.log("✅ Certificate saved to database successfully");
+          // Reload certificates from database to get the updated list
+          if (user?.walletAddress) {
+            await loadIssuerCertificates(user.walletAddress);
+          }
         }
       } catch (dbError) {
         console.warn("⚠️ Database save error:", dbError);
@@ -308,35 +365,6 @@ export default function IssuerDashboard({ activeTab, user }) {
           "Certificate issued on blockchain but failed to save to database"
         );
       }
-
-      const newCertificate = {
-        id: `cert-${result.tokenId}`,
-        holder: holderAddress,
-        name: "New Recipient",
-        type: "Certificate",
-        title: certificateName,
-        issueDate: completionDate,
-        status: "Issued",
-        institution: institutionName,
-        details: "Certificate issued successfully on blockchain",
-        hash: ipfsHash,
-        tokenId: result.tokenId,
-        transactionHash: result.transactionHash,
-        blockNumber: result.blockNumber,
-      };
-
-      console.log("🔍 DEBUG: Created certificate object:", newCertificate);
-
-      setIssuedCertificates([newCertificate, ...issuedCertificates]);
-
-      // Store in localStorage
-      const storedCertificates = JSON.parse(
-        localStorage.getItem("issuedCertificates") || "[]"
-      );
-      localStorage.setItem(
-        "issuedCertificates",
-        JSON.stringify([newCertificate, ...storedCertificates])
-      );
 
       // Clear form
       setHolderAddress("");
@@ -819,69 +847,20 @@ export default function IssuerDashboard({ activeTab, user }) {
     setViewingCertificate(null);
   };
 
-  // Load certificates from localStorage on initial render
+  // LocalStorage migration functionality has been removed
+  // All certificates are now stored directly in the database
+
+  // Clean up any legacy localStorage data on component mount
   React.useEffect(() => {
     if (typeof window !== "undefined") {
-      const storedCertificates = JSON.parse(
-        localStorage.getItem("issuedCertificates") || "[]"
-      );
-      if (storedCertificates.length > 0) {
-        setIssuedCertificates((prevCerts) => {
-          const existingIds = prevCerts.map((cert) => cert.id);
-          const newCerts = storedCertificates.filter(
-            (cert) => !existingIds.includes(cert.id)
-          );
-          return [...prevCerts, ...newCerts];
-        });
-
-        // Migrate localStorage certificates to database if user wallet is available
-        if (user?.walletAddress) {
-          migrateLocalStorageCertificates(
-            storedCertificates,
-            user.walletAddress
-          );
-        }
+      // Check if legacy data exists
+      const legacyData = localStorage.getItem("issuedCertificates");
+      if (legacyData) {
+        console.log("🧹 Cleaning up legacy localStorage certificates data");
+        localStorage.removeItem("issuedCertificates");
       }
     }
-  }, [user?.walletAddress]);
-
-  // Function to migrate localStorage certificates to database
-  const migrateLocalStorageCertificates = async (
-    certificates,
-    issuerWallet
-  ) => {
-    try {
-      console.log(
-        "🔄 Attempting to migrate localStorage certificates to database..."
-      );
-
-      const response = await fetch("/api/certificates/migrate-localStorage", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          certificates,
-          issuerWallet,
-        }),
-      });
-
-      if (response.ok) {
-        const result = await response.json();
-        console.log("✅ Certificate migration result:", result);
-
-        if (result.summary.migrated > 0) {
-          showSuccess(
-            `Migrated ${result.summary.migrated} certificates to database`
-          );
-        }
-      } else {
-        console.warn("⚠️ Certificate migration failed:", await response.text());
-      }
-    } catch (error) {
-      console.warn("⚠️ Certificate migration error:", error);
-    }
-  };
+  }, []);
 
   // Handle certificate revocation
   const handleRevokeCertificate = async (certificate) => {
@@ -894,37 +873,52 @@ export default function IssuerDashboard({ activeTab, user }) {
 
     try {
       showInfo("Revoking certificate on blockchain...");
-      const result = await revokeCertificate(certificate.tokenId);
+      console.log("Revoking certificate with tokenId:", certificate.tokenId);
 
-      if (!result.success) {
-        // Handle user rejection gracefully from structured response
-        if (isResultUserRejection(result)) {
-          showInfo("Transaction was cancelled. Certificate was not revoked.");
-          setRevokeConfirmModal({ show: false, certificate: null });
-          return;
-        }
+      // Use the server-side revocation endpoint
+      const response = await fetch("/api/blockchain/revoke-certificate", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          tokenId: certificate.tokenId,
+        }),
+      });
 
+      const result = await response.json();
+      console.log("Revocation result:", result);
+
+      if (!response.ok) {
         throw new Error(result.error || "Failed to revoke certificate");
       }
 
-      // Update the certificate status in local state
-      setIssuedCertificates((prevCerts) =>
-        prevCerts.map((cert) =>
-          cert.id === certificate.id ? { ...cert, status: "Revoked" } : cert
-        )
+      // Database update is already handled by the server-side revocation endpoint
+      console.log(
+        "Certificate revoked successfully on blockchain and database"
       );
 
-      // Update localStorage
-      const storedCertificates = JSON.parse(
-        localStorage.getItem("issuedCertificates") || "[]"
-      );
-      const updatedStoredCerts = storedCertificates.map((cert) =>
-        cert.id === certificate.id ? { ...cert, status: "Revoked" } : cert
-      );
-      localStorage.setItem(
-        "issuedCertificates",
-        JSON.stringify(updatedStoredCerts)
-      );
+      // Force certificate status update immediately for UI responsiveness
+      console.log("Updating certificate status in UI");
+
+      // Create a completely new array with the updated certificate to force re-render
+      const updatedCertificates = issuedCertificates.map((cert) => {
+        if (cert.id === certificate.id) {
+          return { ...cert, status: "Revoked" };
+        }
+        return cert;
+      });
+
+      console.log("Updated certificates array:", updatedCertificates);
+
+      // Set the state with the new array
+      setIssuedCertificates([...updatedCertificates]);
+
+      // Also reload from database to ensure data consistency
+      if (user?.walletAddress) {
+        console.log("Reloading certificates from database");
+        await loadIssuerCertificates(user.walletAddress);
+      }
 
       showSuccess(
         `Certificate revoked successfully! Transaction: ${result.transactionHash}`
@@ -932,7 +926,6 @@ export default function IssuerDashboard({ activeTab, user }) {
       setRevokeConfirmModal({ show: false, certificate: null });
     } catch (error) {
       console.error("Error revoking certificate:", error);
-
       showError(`Failed to revoke certificate: ${error.message}`);
     } finally {
       setIsRevoking(false);
@@ -2204,7 +2197,10 @@ export default function IssuerDashboard({ activeTab, user }) {
                 </thead>
                 <tbody className="divide-y divide-gray-200">
                   {issuedCertificates.map((cert) => (
-                    <tr key={cert.id}>
+                    <tr
+                      key={`cert-${cert.id}-${cert.status}-${
+                        cert.tokenId || "none"
+                      }`}>
                       <td className="px-4 py-3 whitespace-nowrap font-mono text-sm">
                         {cert.id}
                       </td>
@@ -2214,7 +2210,13 @@ export default function IssuerDashboard({ activeTab, user }) {
                             {cert.name}
                           </div>
                           <div className="ml-2 text-xs text-gray-500">
-                            ({cert.holder.slice(0, 6)}...{cert.holder.slice(-4)}
+                            (
+                            {cert.holder
+                              ? `${cert.holder.slice(
+                                  0,
+                                  6
+                                )}...${cert.holder.slice(-4)}`
+                              : "N/A"}
                             )
                           </div>
                         </div>
@@ -2228,17 +2230,24 @@ export default function IssuerDashboard({ activeTab, user }) {
                       <td className="px-4 py-3 whitespace-nowrap">
                         <span
                           className={`font-medium text-sm ${
-                            cert.status === "Revoked"
+                            cert.status === "Revoked" ||
+                            cert.status === "revoked"
                               ? "text-red-600"
                               : "text-green-600"
-                          }`}>
-                          {cert.status === "Revoked"
+                          }`}
+                          data-status={cert.status}>
+                          {" "}
+                          {/* Added data attribute for debugging */}
+                          {cert.status === "Revoked" ||
+                          cert.status === "revoked"
                             ? "🚫 Revoked"
                             : "✅ Issued"}
                         </span>
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap">
-                        {cert.status !== "Revoked" && cert.tokenId ? (
+                        {cert.status !== "Revoked" &&
+                        cert.status !== "revoked" &&
+                        cert.tokenId ? (
                           <button
                             onClick={() => openRevokeConfirmation(cert)}
                             disabled={isRevoking}
@@ -2246,9 +2255,14 @@ export default function IssuerDashboard({ activeTab, user }) {
                             Revoke
                           </button>
                         ) : (
-                          <span className="text-gray-400 text-sm">
-                            {cert.status === "Revoked" ? "Revoked" : "N/A"}
-                          </span>
+                          <button
+                            disabled={true}
+                            className="bg-gray-400 text-white px-3 py-1 rounded text-sm opacity-50 cursor-not-allowed">
+                            {cert.status === "Revoked" ||
+                            cert.status === "revoked"
+                              ? "Revoked"
+                              : "N/A"}
+                          </button>
                         )}
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap text-right text-sm font-medium">

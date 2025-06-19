@@ -58,17 +58,8 @@ export default async function handler(req, res) {
         usersData = users;
       }
 
-      // Log the admin activity
-      await mysql.logActivity({
-        user_id: user.id,
-        action: "admin_view_users",
-        entity_type: "user",
-        details: `Admin viewed user list${
-          role ? ` filtered by role: ${role}` : ""
-        }`,
-        wallet_address: user.wallet_address,
-        category: "user_management",
-      });
+      // Log the admin activity - Skip logging for admin actions
+      // No longer logging admin activities per requirements
 
       return res.status(200).json({
         success: true,
@@ -124,17 +115,8 @@ export default async function handler(req, res) {
       // Clear user cache
       clearUserCache(userId);
 
-      // Log the deletion activity
-      await mysql.logActivity({
-        user_id: user.id,
-        action: "user_deleted",
-        entity_type: "user",
-        entity_id: targetUser.id.toString(),
-        details: `Admin deleted user account: ${targetUser.wallet_address}`,
-        wallet_address: user.wallet_address,
-        target_wallet_address: targetUser.wallet_address,
-        category: "user_management",
-      });
+      // Log the deletion activity - Skip logging for admin actions
+      // No longer logging admin activities per requirements
 
       return res.status(200).json({
         success: true,
@@ -151,19 +133,8 @@ export default async function handler(req, res) {
   } catch (error) {
     console.error("Admin users API error:", error);
 
-    // Log the error
-    try {
-      await mysql.logActivity({
-        user_id: user?.id || null,
-        action: "admin_api_error",
-        entity_type: "system",
-        details: `Admin users API error: ${error.message}`,
-        wallet_address: user?.wallet_address || null,
-        category: "system_event",
-      });
-    } catch (logError) {
-      console.error("Failed to log error:", logError);
-    }
+    // Log the error - Skip logging for admin actions
+    // No longer logging admin activities per requirements
 
     return res.status(500).json({
       error: "Internal server error",

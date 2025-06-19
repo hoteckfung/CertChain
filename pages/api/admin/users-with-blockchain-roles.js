@@ -91,15 +91,8 @@ export default async function handler(req, res) {
         })
       );
 
-      // Log the admin activity
-      await mysql.logActivity({
-        user_id: user.id,
-        action: "admin_users_viewed",
-        entity_type: "user",
-        details: `Admin viewed user list with blockchain roles`,
-        wallet_address: user.wallet_address,
-        category: "user_management",
-      });
+      // Log the admin activity - Skip logging for admin actions
+      // No longer logging admin activities per requirements
 
       return res.status(200).json({
         success: true,
@@ -134,19 +127,8 @@ export default async function handler(req, res) {
   } catch (error) {
     console.error("Admin blockchain users API error:", error);
 
-    // Log the error
-    try {
-      await mysql.logActivity({
-        user_id: user?.id || null,
-        action: "admin_api_error",
-        entity_type: "system",
-        details: `Admin blockchain users API error: ${error.message}`,
-        wallet_address: user?.wallet_address || null,
-        category: "system_event",
-      });
-    } catch (logError) {
-      console.error("Failed to log error:", logError);
-    }
+    // Log the error - Skip logging for admin actions
+    // No longer logging admin activities per requirements
 
     return res.status(500).json({
       error: "Internal server error",

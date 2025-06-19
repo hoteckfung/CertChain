@@ -36,7 +36,8 @@ export default async function handler(req, res) {
       title: cert.title,
       issuer: cert.issuer_wallet,
       type: cert.description || "Certificate",
-      status: cert.status,
+      // Convert status to capitalized format for consistent UI display
+      status: cert.status === "revoked" ? "Revoked" : "Issued",
       issueDate: cert.issue_date
         ? new Date(cert.issue_date).toLocaleDateString()
         : null,
@@ -45,10 +46,12 @@ export default async function handler(req, res) {
       tokenId: cert.token_id,
       transactionHash: cert.transaction_hash,
       blockNumber: cert.block_number,
+      holder: cert.holder_wallet, // Add this field for UI compatibility
       holderWallet: cert.holder_wallet,
       issuerWallet: cert.issuer_wallet,
       recipient: cert.holder_wallet,
       recipientName: "Certificate Holder", // Could be enhanced to get actual name
+      name: "Certificate Holder", // Add this field for UI compatibility
     }));
 
     res.status(200).json({

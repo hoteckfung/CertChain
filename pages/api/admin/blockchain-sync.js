@@ -41,15 +41,8 @@ export default async function handler(req, res) {
         try {
           startBlockchainSync();
 
-          // Log activity
-          await mysql.logActivity({
-            user_id: user.id,
-            action: "blockchain_sync_started",
-            entity_type: "system",
-            details: "Admin started blockchain event sync service",
-            wallet_address: user.wallet_address,
-            category: "system_event",
-          });
+          // Log activity - Skip logging for admin actions
+          // No longer logging admin activities per requirements
 
           return res.status(200).json({
             success: true,
@@ -69,15 +62,8 @@ export default async function handler(req, res) {
         try {
           stopBlockchainSync();
 
-          // Log activity
-          await mysql.logActivity({
-            user_id: user.id,
-            action: "blockchain_sync_stopped",
-            entity_type: "system",
-            details: "Admin stopped blockchain event sync service",
-            wallet_address: user.wallet_address,
-            category: "system_event",
-          });
+          // Log activity - Skip logging for admin actions
+          // No longer logging admin activities per requirements
 
           return res.status(200).json({
             success: true,
@@ -102,15 +88,8 @@ export default async function handler(req, res) {
 
           startBlockchainSync();
 
-          // Log activity
-          await mysql.logActivity({
-            user_id: user.id,
-            action: "blockchain_sync_restarted",
-            entity_type: "system",
-            details: "Admin restarted blockchain event sync service",
-            wallet_address: user.wallet_address,
-            category: "system_event",
-          });
+          // Log activity - Skip logging for admin actions
+          // No longer logging admin activities per requirements
 
           return res.status(200).json({
             success: true,
@@ -136,19 +115,8 @@ export default async function handler(req, res) {
   } catch (error) {
     console.error("Blockchain sync API error:", error);
 
-    // Log the error
-    try {
-      await mysql.logActivity({
-        user_id: user?.id || null,
-        action: "blockchain_sync_api_error",
-        entity_type: "system",
-        details: `Blockchain sync API error: ${error.message}`,
-        wallet_address: user?.wallet_address || null,
-        category: "system_event",
-      });
-    } catch (logError) {
-      console.error("Failed to log error:", logError);
-    }
+    // Log the error - Skip logging for admin actions
+    // No longer logging admin activities per requirements
 
     return res.status(500).json({
       error: "Internal server error",
