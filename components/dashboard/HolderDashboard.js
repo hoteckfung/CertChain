@@ -150,7 +150,10 @@ export default function HolderDashboard({ activeTab, user }) {
 
             // Import PDF.js dynamically with correct worker path
             const pdfjsLib = await import("pdfjs-dist/build/pdf");
-            pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.worker.min.js`;
+            pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
+              "pdfjs-dist/build/pdf.worker.mjs",
+              import.meta.url
+            ).toString();
 
             const loadingTask = pdfjsLib.getDocument(pdfUrl);
             const pdf = await loadingTask.promise;
