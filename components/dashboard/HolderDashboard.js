@@ -148,12 +148,9 @@ export default function HolderDashboard({ activeTab, user }) {
             const pdfUrl = URL.createObjectURL(blob);
             showInfo("Converting PDF to image format...");
 
-            // Import PDF.js dynamically with correct worker path
+            // Import PDF.js dynamically with CDN worker path for Next.js compatibility
             const pdfjsLib = await import("pdfjs-dist/build/pdf");
-            pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
-              "pdfjs-dist/build/pdf.worker.mjs",
-              import.meta.url
-            ).toString();
+            pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
 
             const loadingTask = pdfjsLib.getDocument(pdfUrl);
             const pdf = await loadingTask.promise;
