@@ -40,13 +40,25 @@ const CONTRACT_CONFIG = {
   address: process.env.NEXT_PUBLIC_CONTRACT_ADDRESS || "0x...", // Deploy and set this
   chainId: process.env.NEXT_PUBLIC_CHAIN_ID || 31337, // Hardhat local by default
   rpcUrl: process.env.NEXT_PUBLIC_RPC_URL || "http://127.0.0.1:8545",
+  // Server-side RPC URL for Docker environments
+  serverRpcUrl:
+    process.env.SERVER_RPC_URL ||
+    process.env.NEXT_PUBLIC_RPC_URL ||
+    "http://127.0.0.1:8545",
 };
 
 /**
  * Get contract instance for read operations
+ * Uses server-side RPC URL when running on server, client-side when in browser
  */
 export function getContractRead() {
-  const provider = new ethers.JsonRpcProvider(CONTRACT_CONFIG.rpcUrl);
+  // Determine if we're running on server or client
+  const isServer = typeof window === "undefined";
+  const rpcUrl = isServer
+    ? CONTRACT_CONFIG.serverRpcUrl
+    : CONTRACT_CONFIG.rpcUrl;
+
+  const provider = new ethers.JsonRpcProvider(rpcUrl);
   return new ethers.Contract(
     CONTRACT_CONFIG.address,
     CERTIFICATE_NFT_ABI,
