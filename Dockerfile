@@ -21,11 +21,13 @@ COPY . .
 ARG NEXT_PUBLIC_RPC_URL=http://host.docker.internal:7545
 ARG NEXT_PUBLIC_CHAIN_ID=1337
 ARG NEXT_PUBLIC_CONTRACT_ADDRESS
+ARG SERVER_RPC_URL=http://host.docker.internal:7545
 
 # Set environment variables for the build
 ENV NEXT_PUBLIC_RPC_URL=$NEXT_PUBLIC_RPC_URL
 ENV NEXT_PUBLIC_CHAIN_ID=$NEXT_PUBLIC_CHAIN_ID
 ENV NEXT_PUBLIC_CONTRACT_ADDRESS=$NEXT_PUBLIC_CONTRACT_ADDRESS
+ENV SERVER_RPC_URL=$SERVER_RPC_URL
 
 # Next.js collects completely anonymous telemetry data about general usage.
 # Learn more here: https://nextjs.org/telemetry

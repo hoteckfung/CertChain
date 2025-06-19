@@ -58,6 +58,7 @@ Before starting, ensure you have these installed:
 - ✅ **Git** - [Download here](https://git-scm.com)
 - ✅ **MetaMask Browser Extension** - [Install here](https://metamask.io)
 - ✅ **Ganache GUI** - [Download here](https://trufflesuite.com/ganache/)
+- ✅ **IPFS Desktop** - [Download here](https://desktop.ipfs.io/) **(Required for certificate storage)**
 
 **💡 Pro Tip:** Use `scripts\deploy.bat --verify` (Windows) or `./scripts/deploy.sh --verify` (Linux/Mac) to check all prerequisites automatically!
 
@@ -85,7 +86,54 @@ chmod +x scripts/deploy.sh
 
 **What this does:** Automatically checks Docker, Node.js, NPM packages, and MetaMask requirements.
 
-### **Step 2: Start Interactive Setup**
+### **Step 2: Setup IPFS Desktop**
+
+**📁 IPFS is required for decentralized certificate storage:**
+
+1. **Download and Install IPFS Desktop:**
+
+   - Visit: https://desktop.ipfs.io/
+   - Download for your platform (Windows, macOS, or Linux)
+   - Install and run the application
+
+2. **Start IPFS Node:**
+
+   - Open IPFS Desktop
+   - The node will start automatically (you'll see a green "Connected" status)
+   - IPFS API will be available at: `http://127.0.0.1:5001`
+   - IPFS Gateway will be available at: `http://127.0.0.1:8080`
+
+3. **Resolve Port Conflict (Important):**
+
+   - **Port 8080 conflict:** phpMyAdmin (database admin) also uses port 8080
+   - In IPFS Desktop: Go to **Settings** → **IPFS Config**
+   - Find the `"Gateway"` section and change port from `8080` to `8081`:
+     ```json
+     "Gateway": {
+       "HTTPHeaders": {},
+       "RootRedirect": "",
+       "Writable": false,
+       "PathPrefixes": [],
+       "APICommands": [],
+       "NoFetch": false,
+       "NoDNSLink": false,
+       "PublicGateways": null
+     },
+     "Addresses": {
+       "Gateway": "/ip4/127.0.0.1/tcp/8081"
+     }
+     ```
+   - Click **Save** and restart IPFS Desktop
+   - IPFS Gateway will now be available at: `http://127.0.0.1:8081`
+
+4. **Verify IPFS is Running:**
+   - Check that the IPFS Desktop shows "Connected" status
+   - Visit `http://127.0.0.1:5001/webui` for the IPFS web interface
+   - Verify gateway access at `http://127.0.0.1:8081`
+
+**💡 Important:** Keep IPFS Desktop running whenever using CertChain. Certificates are stored on IPFS for decentralized, tamper-proof storage.
+
+### **Step 3: Start Interactive Setup**
 
 ```bash
 # Windows:
@@ -100,7 +148,7 @@ scripts\deploy.bat --setup
 - ✅ Verifies all prerequisites are installed
 - ✅ Creates `.env.local` configuration file automatically
 - ✅ Starts Docker services (MySQL database + web application)
-- ✅ Checks for Ganache connection
+- ✅ Checks for Ganache and IPFS connections
 - ✅ Provides clear next steps
 
 **After this step, you'll have:**
@@ -109,7 +157,7 @@ scripts\deploy.bat --setup
 - 🗄️ Database admin at: http://localhost:8080
 - 📝 Environment file created with templates
 
-### **Step 3: Setup Ganache Blockchain**
+### **Step 4: Setup Ganache Blockchain**
 
 1. **Download and Install Ganache GUI:**
 
@@ -128,18 +176,53 @@ scripts\deploy.bat --setup
    - In Ganache GUI: Click the 🔑 icon next to the first account
    - Copy the private key (starts with `0x`)
 
-### **Step 4: Configure Deployer Key**
+### **Step 5: Configure Your Environment Keys**
 
-Edit the `.env.local` file (created automatically in Step 2):
+**🔑 Setting up your own wallet keys in `.env.local`:**
+
+The setup script creates a `.env.local` file with placeholder values. **You MUST update it with your own keys:**
 
 ```env
-# Find this line and add your Ganache private key:
-DEPLOYER_PRIVATE_KEY=0xYourGanachePrivateKeyHere
+# MySQL Configuration (for local development)
+MYSQL_HOST=localhost
+MYSQL_PORT=3306
+MYSQL_USER=root
+MYSQL_PASSWORD=mysql
+MYSQL_DATABASE=certchain
+
+# MySQL Configuration (for Docker - will override above when using Docker)
+# MYSQL_HOST=mysql
+
+# Blockchain Configuration
+NEXT_PUBLIC_CONTRACT_ADDRESS=0x...will-be-set-after-deployment
+NEXT_PUBLIC_RPC_URL=http://127.0.0.1:7545
+NEXT_PUBLIC_CHAIN_ID=1337
+
+# Deployer Configuration - REPLACE WITH YOUR GANACHE KEYS
+DEPLOYER_ADDRESS=0xYourGanacheAccountAddress
+DEPLOYER_PRIVATE_KEY=0xYourGanachePrivateKeyFromStep4
+
+# Server Wallet (for server-side blockchain interactions)
+# Usually the same as deployer for local development
+SERVER_WALLET_PRIVATE_KEY=0xYourGanachePrivateKeyFromStep4
+
+# Application Settings
+NODE_ENV=development
 ```
 
-**💡 Important:** The first Ganache account automatically gets admin privileges!
+**📝 How to update your keys:**
 
-### **Step 5: Deploy Smart Contract & Complete Setup**
+1. **DEPLOYER_ADDRESS**: Copy the public address of your first Ganache account
+2. **DEPLOYER_PRIVATE_KEY**: Paste the private key you copied in Step 4
+3. **SERVER_WALLET_PRIVATE_KEY**: Use the same private key for local development
+
+**💡 Important:**
+
+- The first Ganache account automatically gets admin privileges!
+- Never commit real private keys to version control
+- For production, use environment variables or secure key management
+
+### **Step 6: Deploy Smart Contract & Complete Setup**
 
 Choose one of these options:
 
@@ -177,7 +260,7 @@ node scripts/update-contract-address.js 0xYourContractAddress
 # Linux/Mac: ./scripts/deploy.sh --stop && ./scripts/deploy.sh
 ```
 
-### **Step 6: Setup MetaMask**
+### **Step 7: Setup MetaMask**
 
 1. **Add Ganache Network to MetaMask:**
 
@@ -190,10 +273,10 @@ node scripts/update-contract-address.js 0xYourContractAddress
 
 2. **Import Your Ganache Account:**
    - In MetaMask: Account menu → "Import Account"
-   - Paste your Ganache private key (from Step 3)
+   - Paste your Ganache private key (from Step 4)
    - Click "Import"
 
-### **Step 7: Test Your Installation**
+### **Step 8: Test Your Installation**
 
 1. **Visit the Application:**
 
@@ -278,6 +361,8 @@ After successful deployment, your CertChain system will be available at:
 | **Database Admin**  | http://localhost:8080                    | phpMyAdmin (user: `certchain_user`, password: `certchain_password`) |
 | **Health Check**    | http://localhost:3000/api/health         | System status endpoint                                              |
 | **Storage Cleaner** | http://localhost:3000/clear-storage.html | Clear browser cache                                                 |
+| **IPFS Gateway**    | http://127.0.0.1:8081                    | IPFS local gateway for file access (port changed to avoid conflict) |
+| **IPFS API**        | http://127.0.0.1:5001                    | IPFS HTTP API endpoint                                              |
 
 ---
 
@@ -300,10 +385,20 @@ scripts\deploy.bat --health
 | ---------------------------------- | --------------------------- | -------------------------------------------------- |
 | **"DEPLOYER_PRIVATE_KEY not set"** | Contract deployment fails   | Add private key from Ganache to `.env.local`       |
 | **"Cannot connect to Ganache"**    | Blockchain connection fails | Start Ganache GUI on port 7545                     |
+| **"IPFS node not running"**        | Certificate storage fails   | Start IPFS Desktop and ensure it's connected       |
 | **"Port 3000 already in use"**     | Application won't start     | Stop existing process or use `--stop` then restart |
 | **"Database connection failed"**   | MySQL errors                | Wait 30 seconds for MySQL startup, check Docker    |
 | **MetaMask "Chain ID mismatch"**   | Transaction failures        | Add Ganache network (Chain ID: 1337) to MetaMask   |
 | **"missing revert data"**          | Certificate issuance fails  | Use admin account or grant ISSUER role             |
+| **"Failed to upload to IPFS"**     | Certificate creation fails  | Verify IPFS Desktop is running and connected       |
+
+### **IPFS-Specific Troubleshooting**
+
+| Issue                              | Symptoms                   | Solution                                      |
+| ---------------------------------- | -------------------------- | --------------------------------------------- |
+| **IPFS Desktop not connecting**    | Red status or offline      | Restart IPFS Desktop, check firewall settings |
+| **IPFS API errors**                | Upload failures            | Verify `http://127.0.0.1:5001` is accessible  |
+| **Certificate images not loading** | Broken images in dashboard | Check IPFS node status, restart if needed     |
 
 ### **Reset Everything**
 
@@ -345,9 +440,9 @@ docker-compose logs mysql           # Database
 ### 📜 **ERC-721 NFT Certificate System**
 
 - **ERC-721 NFT certificates** minted on blockchain with full standards compliance
-- **IPFS storage** for decentralized document hosting
+- **Local IPFS storage** for decentralized document hosting and tamper-proof integrity
 - **QR code verification** for instant validation
-- **Tamper-proof** records that recipients truly own
+- **True ownership** - recipients own their certificates as NFTs
 
 ### 📊 **Comprehensive Activity Monitoring**
 
@@ -362,6 +457,13 @@ docker-compose logs mysql           # Database
 - **Role-based dashboards** with unified interface for all user types
 - **Real-time updates** and smooth user experience
 - **Privacy-compliant** data access (users only see their own certificates)
+
+### 🔒 **Enhanced Security & Privacy**
+
+- **Wallet-isolated data** - users can only access their own certificates
+- **Secure role-based permissions** enforced at both smart contract and application levels
+- **Tamper-proof certificate integrity** through blockchain and IPFS
+- **No central authority** - decentralized storage and verification
 
 ---
 
@@ -404,7 +506,7 @@ docker-compose logs mysql           # Database
 ### **Infrastructure & DevOps**
 
 - **Docker & Docker Compose** - Containerized deployment
-- **IPFS** - Decentralized file storage
+- **IPFS Desktop** - Decentralized file storage
 - **Health monitoring** - Built-in system diagnostics
 
 ---
@@ -416,6 +518,7 @@ docker-compose logs mysql           # Database
 1. **Start Development Environment:**
 
    ```bash
+   # Start IPFS Desktop (keep running)
    # Start Ganache GUI (keep running)
    # Run setup
    # Windows: scripts\deploy.bat --setup
@@ -495,16 +598,39 @@ npx hardhat clean
 
 For production environments, update these configurations:
 
-### **1. Blockchain Configuration**
+### **1. Environment Configuration**
+
+Update your `.env.local` for production:
 
 ```env
-# Update for mainnet or testnet
+# Blockchain Configuration
 NEXT_PUBLIC_CHAIN_ID=1  # Mainnet (or 5 for Goerli testnet)
 NEXT_PUBLIC_RPC_URL=https://mainnet.infura.io/v3/YOUR-PROJECT-ID
 NEXT_PUBLIC_CONTRACT_ADDRESS=0x...your-deployed-contract
+
+# Use secure, unique private keys
+DEPLOYER_PRIVATE_KEY=0x...your-mainnet-deployer-key
+SERVER_WALLET_PRIVATE_KEY=0x...your-server-wallet-key
+
+# Production database
+MYSQL_HOST=your-production-db-host
+MYSQL_USER=your-db-user
+MYSQL_PASSWORD=your-secure-password
+MYSQL_DATABASE=certchain_prod
+
+# Application Settings
+NODE_ENV=production
 ```
 
-### **2. Security Checklist**
+### **2. IPFS Configuration for Production**
+
+For production, consider:
+
+- **IPFS Cluster** - Set up an IPFS cluster for redundancy
+- **Pinning Services** - Use services like Pinata or Infura IPFS for reliable pinning
+- **Custom IPFS Gateway** - Configure your own IPFS gateway for faster access
+
+### **3. Security Checklist**
 
 - ✅ Use environment variables for all secrets
 - ✅ Enable HTTPS only (disable HTTP)
@@ -512,6 +638,8 @@ NEXT_PUBLIC_CONTRACT_ADDRESS=0x...your-deployed-contract
 - ✅ Regular security audits of smart contracts
 - ✅ Database access restrictions
 - ✅ Rate limiting on API endpoints
+- ✅ Secure IPFS node configuration
+- ✅ Regular backups of certificate data
 
 ---
 
@@ -533,6 +661,7 @@ We welcome contributions! Here's how to get started:
 - Update documentation for any API changes
 - Ensure deployment scripts still work
 - Test with fresh database setup
+- Verify IPFS integration works correctly
 
 ---
 
@@ -549,6 +678,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - [**Next.js**](https://nextjs.org/) - React production framework
 - [**Tailwind CSS**](https://tailwindcss.com/) - Utility-first CSS framework
 - [**shadcn/ui**](https://ui.shadcn.com/) - Beautiful React components
+- [**IPFS**](https://ipfs.io/) - Decentralized file storage protocol
 
 ---
 
@@ -570,6 +700,6 @@ scripts\deploy.bat --setup
 [![ERC721](https://img.shields.io/badge/Standard-ERC721-blue.svg)](.)
 [![Docker](https://img.shields.io/badge/Docker-Ready-blue.svg)](.)
 
-**🏆 Features**: ERC-721 NFT Certificates • Role-Based Access • Activity Monitoring • Docker Ready
+**🏆 Features**: ERC-721 NFT Certificates • Role-Based Access • Activity Monitoring • IPFS Storage • Docker Ready
 
 </div>
