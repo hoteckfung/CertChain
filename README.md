@@ -363,28 +363,26 @@ Transaction hash: 0xabc123...
 
 ### **8.3 Update Contract Address in Configuration**
 
-1. **Copy the contract address** from the deployment output
-2. **Open `.env`** in a text editor
-3. **Replace** `NEXT_PUBLIC_CONTRACT_ADDRESS=0x0000000000000000000000000000000000000000`
-4. **With** `NEXT_PUBLIC_CONTRACT_ADDRESS=0xYourActualContractAddress`
-5. **Save the file**
-
-Alternatively, use the update script:
+**Use the automated script to update the contract address:**
 
 ```bash
 # Use the automated script to update config files
 node scripts/update-contract-address.js 0xYourActualContractAddress
 ```
 
-### **8.4 Restart Application with New Configuration**
+This script will automatically update the contract address in your `.env` file and any other configuration files that need it.
+
+### **8.4 Rebuild Application with New Configuration**
 
 ```bash
-# Restart the web application to load new contract address
-docker-compose restart webapp
+# Rebuild the Docker container to load the new contract address
+docker-compose up --build -d webapp
 
-# Wait for restart (about 30 seconds)
+# Wait for rebuild and startup (about 1-2 minutes)
 docker-compose logs webapp
 ```
+
+**Note:** Simply restarting the webapp doesn't load the new contract address. You need to rebuild the container to pick up the updated environment variables.
 
 **✅ Verification:**
 

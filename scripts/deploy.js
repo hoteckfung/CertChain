@@ -115,20 +115,10 @@ async function main() {
     // Provide next steps
     console.log("🎯 Next Steps:");
     console.log("🚀 ============ 🚀");
-    console.log("1. 📝 Update your application configuration:");
+    console.log("📝 Update your application configuration:");
     console.log(
       `   node scripts/update-contract-address.js ${contractAddress}`
     );
-    console.log("");
-    console.log("2. 🔄 Restart your Docker containers:");
-    console.log("   docker-compose restart webapp");
-    console.log("");
-    console.log("3. 🌐 Visit your application:");
-    console.log("   http://localhost:3000");
-    console.log("");
-    console.log("4. 🦊 Connect your deployer wallet in MetaMask:");
-    console.log(`   Address: ${deployerAddress}`);
-    console.log("   (This wallet will have admin privileges)");
     console.log("");
 
     // Check if .env needs updating
