@@ -268,28 +268,9 @@ describe("CertificateNFT", function () {
       expect(certificate.issuer).to.equal(issuer.address);
     });
 
-    it("Should verify certificate by token ID", async function () {
-      const [exists, isValid, certificate] =
-        await certificateNFT.verifyCertificateById(1);
-
-      expect(exists).to.be.true;
-      expect(isValid).to.be.true;
-      expect(certificate.tokenId).to.equal(1);
-      expect(certificate.recipient).to.equal(recipient.address);
-    });
-
     it("Should return false for non-existent IPFS hash", async function () {
       const [exists, isValid, certificate] =
         await certificateNFT.verifyCertificate("QmNonExistent");
-
-      expect(exists).to.be.false;
-      expect(isValid).to.be.false;
-      expect(certificate.tokenId).to.equal(0);
-    });
-
-    it("Should return false for non-existent token ID", async function () {
-      const [exists, isValid, certificate] =
-        await certificateNFT.verifyCertificateById(999);
 
       expect(exists).to.be.false;
       expect(isValid).to.be.false;
@@ -332,10 +313,10 @@ describe("CertificateNFT", function () {
     });
 
     it("Should return correct certificate count for user", async function () {
-      const count = await certificateNFT.getUserCertificateCount(
+      const certificates = await certificateNFT.getUserCertificates(
         recipient.address
       );
-      expect(count).to.equal(2);
+      expect(certificates.length).to.equal(2);
     });
 
     it("Should return empty array for user with no certificates", async function () {
@@ -363,15 +344,6 @@ describe("CertificateNFT", function () {
       await expect(certificateNFT.connect(issuer).revokeCertificate(1))
         .to.emit(certificateNFT, "CertificateRevoked")
         .withArgs(1, issuer.address);
-
-      const certificate = await certificateNFT.certificates(1);
-      expect(certificate.isValid).to.be.false;
-    });
-
-    it("Should allow admin to revoke any certificate", async function () {
-      await expect(certificateNFT.connect(owner).revokeCertificate(1))
-        .to.emit(certificateNFT, "CertificateRevoked")
-        .withArgs(1, owner.address);
 
       const certificate = await certificateNFT.certificates(1);
       expect(certificate.isValid).to.be.false;

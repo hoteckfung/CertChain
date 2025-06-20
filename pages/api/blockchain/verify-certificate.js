@@ -1,7 +1,4 @@
-import {
-  verifyCertificateByHash,
-  verifyCertificateById,
-} from "../../../utils/contract";
+import { verifyCertificateByHash } from "../../../utils/contract";
 
 export default async function handler(req, res) {
   if (req.method !== "GET") {
@@ -9,30 +6,17 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { ipfsHash, tokenId } = req.query;
+    const { ipfsHash } = req.query;
 
-    // Must provide either ipfsHash or tokenId
-    if (!ipfsHash && !tokenId) {
+    // Must provide ipfsHash
+    if (!ipfsHash) {
       return res.status(400).json({
-        error: "Must provide either ipfsHash or tokenId parameter",
+        error: "Must provide ipfsHash parameter",
       });
     }
 
-    let result;
-
-    if (ipfsHash) {
-      // Verify by IPFS hash
-      result = await verifyCertificateByHash(ipfsHash);
-    } else {
-      // Verify by token ID
-      const tokenIdNum = parseInt(tokenId);
-      if (isNaN(tokenIdNum) || tokenIdNum <= 0) {
-        return res.status(400).json({
-          error: "Invalid tokenId format",
-        });
-      }
-      result = await verifyCertificateById(tokenIdNum);
-    }
+    // Verify by IPFS hash
+    const result = await verifyCertificateByHash(ipfsHash);
 
     if (!result.success) {
       return res.status(500).json({

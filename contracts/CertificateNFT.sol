@@ -144,32 +144,6 @@ contract CertificateNFT is ERC721, ERC721URIStorage, AccessControl, Pausable {
     }
 
     /**
-     * @dev Verify a certificate by token ID
-     * @param tokenId Token ID of the certificate to verify
-     * @return exists Whether the certificate exists
-     * @return isValid Whether the certificate is valid (not revoked)
-     * @return certificate The certificate data
-     */
-    function verifyCertificateById(
-        uint256 tokenId
-    )
-        public
-        view
-        returns (bool exists, bool isValid, Certificate memory certificate)
-    {
-        if (tokenId == 0 || tokenId > _tokenIdCounter) {
-            return (
-                false,
-                false,
-                Certificate(0, address(0), address(0), "", "", "", "", 0, false)
-            );
-        }
-
-        Certificate memory cert = certificates[tokenId];
-        return (true, cert.isValid, cert);
-    }
-
-    /**
      * @dev Get all certificates for a specific user
      * @param user Address of the user
      * @return Certificate array containing all user's certificates
@@ -188,7 +162,7 @@ contract CertificateNFT is ERC721, ERC721URIStorage, AccessControl, Pausable {
     }
 
     /**
-     * @dev Revoke a certificate (admin or issuer only)
+     * @dev Revoke a certificate (issuer only)
      * @param tokenId Token ID of the certificate to revoke
      */
     function revokeCertificate(uint256 tokenId) public {
@@ -196,8 +170,8 @@ contract CertificateNFT is ERC721, ERC721URIStorage, AccessControl, Pausable {
 
         Certificate storage cert = certificates[tokenId];
         require(
-            hasRole(ADMIN_ROLE, msg.sender) || cert.issuer == msg.sender,
-            "Only admin or original issuer can revoke certificate"
+            cert.issuer == msg.sender,
+            "Only original issuer can revoke certificate"
         );
         require(cert.isValid, "Certificate is already revoked");
 
