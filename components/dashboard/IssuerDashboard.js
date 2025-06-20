@@ -928,19 +928,47 @@ export default function IssuerDashboard({ activeTab, user }) {
             console.log("Client-side revocation successful:", clientResult);
 
             // Update certificate status in database via API
-            await fetch("/api/certificates/update-status", {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-              },
-              body: JSON.stringify({
-                tokenId: certificate.tokenId,
-                status: "Revoked",
-                transactionHash: clientResult.transactionHash,
-              }),
-            });
+            try {
+              const dbUpdateResponse = await fetch(
+                "/api/certificates/update-status",
+                {
+                  method: "POST",
+                  headers: {
+                    "Content-Type": "application/json",
+                  },
+                  body: JSON.stringify({
+                    tokenId: certificate.tokenId,
+                    status: "Revoked",
+                    transactionHash: clientResult.transactionHash,
+                  }),
+                }
+              );
 
-            // Update UI
+              if (!dbUpdateResponse.ok) {
+                const dbError = await dbUpdateResponse.json();
+                console.warn(
+                  "⚠️ Failed to update certificate status in database:",
+                  dbError
+                );
+                showWarning(
+                  `Certificate revoked on blockchain (Transaction: ${clientResult.transactionHash}) but failed to update database. Please refresh the page.`
+                );
+              } else {
+                console.log(
+                  "✅ Certificate status updated in database successfully"
+                );
+                showSuccess(
+                  `Certificate revoked successfully! Transaction: ${clientResult.transactionHash}`
+                );
+              }
+            } catch (dbUpdateError) {
+              console.warn("⚠️ Database update error:", dbUpdateError);
+              showWarning(
+                `Certificate revoked on blockchain (Transaction: ${clientResult.transactionHash}) but failed to update database. Please refresh the page.`
+              );
+            }
+
+            // Update UI regardless of database update result
             const updatedCertificates = issuedCertificates.map((cert) => {
               if (cert.id === certificate.id) {
                 return { ...cert, status: "Revoked" };
@@ -949,14 +977,11 @@ export default function IssuerDashboard({ activeTab, user }) {
             });
             setIssuedCertificates([...updatedCertificates]);
 
-            // Reload from database
+            // Reload from database to ensure consistency
             if (user?.walletAddress) {
               await loadIssuerCertificates(user.walletAddress);
             }
 
-            showSuccess(
-              `Certificate revoked successfully! Transaction: ${clientResult.transactionHash}`
-            );
             setRevokeConfirmModal({ show: false, certificate: null });
           } else if (clientResult.userRejected) {
             showError("Transaction was cancelled by user");
