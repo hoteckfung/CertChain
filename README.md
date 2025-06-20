@@ -148,15 +148,7 @@ curl "http://127.0.0.1:8081/ipfs/"
    - Download for your operating system
    - Install and launch Docker Desktop
 
-2. **Configure Docker Resources:**
-
-   - Open Docker Desktop settings
-   - Go to **Resources** → **Advanced**
-   - Set **Memory:** At least 4GB (8GB recommended)
-   - Set **CPUs:** At least 2 cores
-   - Click **"Apply & Restart"**
-
-3. **Verify Docker Installation:**
+2. **Verify Docker Installation:**
 
    ```bash
    # Check Docker version
@@ -777,23 +769,45 @@ docker-compose restart webapp
 
 ### **System APIs**
 
-- `GET /api/health` - System health status
-- `GET /api/db-test` - Database connectivity test
+- `GET /api/health` - System health status and connectivity test
 
 ### **Authentication APIs**
 
 - `POST /api/auth/login` - Wallet-based authentication
-- `GET /api/auth/verify-role` - Role verification
+- `POST /api/auth/logout` - User logout and session cleanup
+- `GET /api/auth/verify-role` - Role verification for access control
+- `GET /api/auth/get-profile` - Get user profile information
+- `POST /api/auth/update-last-login` - Update user's last login timestamp
+
+### **Blockchain APIs**
+
+- `POST /api/blockchain/issue-certificate` - Issue ERC-721 NFT certificate on blockchain
+- `POST /api/blockchain/revoke-certificate` - Revoke certificate on blockchain
+- `POST /api/blockchain/verify-certificate` - Verify certificate on blockchain
 
 ### **Certificate APIs**
 
-- `POST /api/blockchain/issue-certificate` - Issue ERC-721 NFT certificate
-- `GET /api/certificates/holder/[walletAddress]` - Get certificates for holder
-- `GET /api/certificates/verify/[hash]` - Public certificate verification
+- `POST /api/certificates/create` - Create new certificate record
+- `PUT /api/certificates/update-status` - Update certificate status
+- `GET /api/certificates/holder/[walletAddress]` - Get certificates for specific holder
+- `GET /api/certificates/issuer/[walletAddress]` - Get certificates issued by specific issuer
+- `GET /api/certificates/verify/[hash]` - Public certificate verification by hash
+- `POST /api/certificates/migrate-localStorage` - Migrate localStorage data to database
 
 ### **Activity APIs**
 
-- `GET /api/activity/get-logs` - Retrieve activity logs (with filtering)
+- `POST /api/activity/log` - Log activity/audit events
+- `GET /api/activity/get-logs` - Retrieve activity logs with filtering options
+
+### **Admin APIs**
+
+- `GET /api/admin/users` - Get all users (admin only)
+- `GET /api/admin/users-with-blockchain-roles` - Get users with blockchain roles
+- `POST /api/admin/blockchain-sync` - Synchronize blockchain data
+
+### **Profile APIs**
+
+- `GET /api/profile/[walletAddress]` - Get user profile by wallet address
 
 ---
 
