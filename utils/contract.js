@@ -6,7 +6,6 @@ const CERTIFICATE_NFT_ABI = [
   // Core functions
   "function issueCertificate(address recipient, string ipfsHash, string certificateType, string recipientName, string issuerName) returns (uint256)",
   "function verifyCertificate(string ipfsHash) view returns (bool exists, bool isValid, tuple(uint256 tokenId, address recipient, address issuer, string ipfsHash, string certificateType, string recipientName, string issuerName, uint256 issueDate, bool isValid) certificate)",
-  "function verifyCertificateById(uint256 tokenId) view returns (bool exists, bool isValid, tuple(uint256 tokenId, address recipient, address issuer, string ipfsHash, string certificateType, string recipientName, string issuerName, uint256 issueDate, bool isValid) certificate)",
   "function getUserCertificates(address user) view returns (tuple(uint256 tokenId, address recipient, address issuer, string ipfsHash, string certificateType, string recipientName, string issuerName, uint256 issueDate, bool isValid)[])",
   "function revokeCertificate(uint256 tokenId)",
   "function getTotalCertificates() view returns (uint256)",
@@ -321,43 +320,6 @@ export async function verifyCertificateByHash(ipfsHash) {
     const contract = getContractRead();
     const [exists, isValid, certificate] = await contract.verifyCertificate(
       ipfsHash
-    );
-
-    return {
-      success: true,
-      exists,
-      isValid,
-      certificate: exists
-        ? {
-            tokenId: certificate.tokenId.toString(),
-            recipient: certificate.recipient,
-            issuer: certificate.issuer,
-            ipfsHash: certificate.ipfsHash,
-            certificateType: certificate.certificateType,
-            recipientName: certificate.recipientName,
-            issuerName: certificate.issuerName,
-            issueDate: new Date(Number(certificate.issueDate) * 1000),
-            isValid: certificate.isValid,
-          }
-        : null,
-    };
-  } catch (error) {
-    console.error("Error verifying certificate:", error);
-    return {
-      success: false,
-      error: error.message,
-    };
-  }
-}
-
-/**
- * Verify a certificate by token ID
- */
-export async function verifyCertificateById(tokenId) {
-  try {
-    const contract = getContractRead();
-    const [exists, isValid, certificate] = await contract.verifyCertificateById(
-      tokenId
     );
 
     return {

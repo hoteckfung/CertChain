@@ -34,7 +34,6 @@ function updateContractAddress(newAddress, deployerAddress = null) {
     console.log("✅ Updated .env");
   } catch (error) {
     console.error("❌ Error updating .env:", error.message);
-    return;
   }
 
   console.log("🎉 Contract address update complete!");
