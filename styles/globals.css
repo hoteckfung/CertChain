@@ -2,7 +2,6 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Hide Next.js portal */
 nextjs-portal {
     display: none;
 }

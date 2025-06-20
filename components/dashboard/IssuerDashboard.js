@@ -871,10 +871,10 @@ export default function IssuerDashboard({ activeTab, user }) {
     setIsRevoking(true);
 
     try {
-      showInfo("Revoking certificate on blockchain...");
+      showInfo("Attempting to revoke certificate...");
       console.log("Revoking certificate with tokenId:", certificate.tokenId);
 
-      // Use the server-side revocation endpoint
+      // First try server-side revocation
       const response = await fetch("/api/blockchain/revoke-certificate", {
         method: "POST",
         headers: {
@@ -888,41 +888,123 @@ export default function IssuerDashboard({ activeTab, user }) {
       const result = await response.json();
       console.log("Revocation result:", result);
 
-      if (!response.ok) {
-        throw new Error(result.error || "Failed to revoke certificate");
-      }
+      if (response.ok && result.success) {
+        // Server-side revocation successful
+        console.log("Certificate revoked successfully via server");
 
-      // Database update is already handled by the server-side revocation endpoint
-      console.log(
-        "Certificate revoked successfully on blockchain and database"
-      );
+        // Update UI immediately
+        const updatedCertificates = issuedCertificates.map((cert) => {
+          if (cert.id === certificate.id) {
+            return { ...cert, status: "Revoked" };
+          }
+          return cert;
+        });
+        setIssuedCertificates([...updatedCertificates]);
 
-      // Force certificate status update immediately for UI responsiveness
-      console.log("Updating certificate status in UI");
-
-      // Create a completely new array with the updated certificate to force re-render
-      const updatedCertificates = issuedCertificates.map((cert) => {
-        if (cert.id === certificate.id) {
-          return { ...cert, status: "Revoked" };
+        // Reload from database to ensure consistency
+        if (user?.walletAddress) {
+          await loadIssuerCertificates(user.walletAddress);
         }
-        return cert;
-      });
 
-      console.log("Updated certificates array:", updatedCertificates);
+        showSuccess(
+          result.blockchainRevoked
+            ? `Certificate revoked successfully on blockchain! Transaction: ${result.transactionHash}`
+            : "Certificate revoked successfully in database"
+        );
+        setRevokeConfirmModal({ show: false, certificate: null });
+      } else if (result.requiresFrontendRevocation) {
+        // Server cannot revoke - need to use frontend/user's wallet
+        console.log("Server cannot revoke, attempting frontend revocation...");
 
-      // Set the state with the new array
-      setIssuedCertificates([...updatedCertificates]);
+        showInfo(
+          "Server cannot revoke this certificate. Attempting revocation with your wallet..."
+        );
 
-      // Also reload from database to ensure data consistency
-      if (user?.walletAddress) {
-        console.log("Reloading certificates from database");
-        await loadIssuerCertificates(user.walletAddress);
+        try {
+          // Use the already imported revokeCertificate function
+          const clientResult = await revokeCertificate(certificate.tokenId);
+
+          if (clientResult.success) {
+            console.log("Client-side revocation successful:", clientResult);
+
+            // Update certificate status in database via API
+            try {
+              const dbUpdateResponse = await fetch(
+                "/api/certificates/update-status",
+                {
+                  method: "POST",
+                  headers: {
+                    "Content-Type": "application/json",
+                  },
+                  body: JSON.stringify({
+                    tokenId: certificate.tokenId,
+                    status: "Revoked",
+                    transactionHash: clientResult.transactionHash,
+                  }),
+                }
+              );
+
+              if (!dbUpdateResponse.ok) {
+                const dbError = await dbUpdateResponse.json();
+                console.warn(
+                  "⚠️ Failed to update certificate status in database:",
+                  dbError
+                );
+                showWarning(
+                  `Certificate revoked on blockchain (Transaction: ${clientResult.transactionHash}) but failed to update database. Please refresh the page.`
+                );
+              } else {
+                console.log(
+                  "✅ Certificate status updated in database successfully"
+                );
+                showSuccess(
+                  `Certificate revoked successfully! Transaction: ${clientResult.transactionHash}`
+                );
+              }
+            } catch (dbUpdateError) {
+              console.warn("⚠️ Database update error:", dbUpdateError);
+              showWarning(
+                `Certificate revoked on blockchain (Transaction: ${clientResult.transactionHash}) but failed to update database. Please refresh the page.`
+              );
+            }
+
+            // Update UI regardless of database update result
+            const updatedCertificates = issuedCertificates.map((cert) => {
+              if (cert.id === certificate.id) {
+                return { ...cert, status: "Revoked" };
+              }
+              return cert;
+            });
+            setIssuedCertificates([...updatedCertificates]);
+
+            // Reload from database to ensure consistency
+            if (user?.walletAddress) {
+              await loadIssuerCertificates(user.walletAddress);
+            }
+
+            setRevokeConfirmModal({ show: false, certificate: null });
+          } else if (clientResult.userRejected) {
+            showError("Transaction was cancelled by user");
+          } else {
+            throw new Error(clientResult.error || "Frontend revocation failed");
+          }
+        } catch (frontendError) {
+          console.error("Frontend revocation failed:", frontendError);
+
+          // Provide helpful instructions if client-side revocation fails
+          showError(
+            "Automatic revocation failed. Please revoke manually: " +
+              "Connect MetaMask, go to your blockchain explorer, find the smart contract, " +
+              `and call revokeCertificate with token ID: ${certificate.tokenId}`
+          );
+          setRevokeConfirmModal({ show: false, certificate: null });
+        }
+      } else {
+        // Some other error occurred
+        const errorMessage = result.error || "Failed to revoke certificate";
+        const errorDetails = result.details ? ` (${result.details})` : "";
+        throw new Error(errorMessage + errorDetails);
       }
-
-      showSuccess(
-        `Certificate revoked successfully! Transaction: ${result.transactionHash}`
-      );
-      setRevokeConfirmModal({ show: false, certificate: null });
     } catch (error) {
       console.error("Error revoking certificate:", error);
       showError(`Failed to revoke certificate: ${error.message}`);
