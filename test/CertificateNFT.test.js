@@ -352,9 +352,7 @@ describe("CertificateNFT", function () {
     it("Should not allow unauthorized user to revoke certificate", async function () {
       await expect(
         certificateNFT.connect(unauthorized).revokeCertificate(1)
-      ).to.be.revertedWith(
-        "Only admin or original issuer can revoke certificate"
-      );
+      ).to.be.revertedWith("Only original issuer can revoke certificate");
     });
 
     it("Should not allow revoking non-existent certificate", async function () {
@@ -378,39 +376,6 @@ describe("CertificateNFT", function () {
         await certificateNFT.verifyCertificate(testCertificate.ipfsHash);
       expect(exists).to.be.true;
       expect(isValid).to.be.false;
-    });
-  });
-
-  describe("Pausable Functionality", function () {
-    it("Should allow admin to pause contract", async function () {
-      await certificateNFT.connect(owner).pause();
-      expect(await certificateNFT.paused()).to.be.true;
-    });
-
-    it("Should allow admin to unpause contract", async function () {
-      await certificateNFT.connect(owner).pause();
-      await certificateNFT.connect(owner).unpause();
-      expect(await certificateNFT.paused()).to.be.false;
-    });
-
-    it("Should not allow issuance when paused", async function () {
-      await certificateNFT.connect(owner).pause();
-
-      await expect(
-        certificateNFT
-          .connect(issuer)
-          .issueCertificate(
-            recipient.address,
-            testCertificate.ipfsHash,
-            testCertificate.certificateType,
-            testCertificate.recipientName,
-            testCertificate.issuerName
-          )
-      ).to.be.reverted;
-    });
-
-    it("Should not allow non-admin to pause", async function () {
-      await expect(certificateNFT.connect(unauthorized).pause()).to.be.reverted;
     });
   });
 
@@ -444,16 +409,6 @@ describe("CertificateNFT", function () {
         .connect(recipient)
         .transferFrom(recipient.address, unauthorized.address, 1);
       expect(await certificateNFT.ownerOf(1)).to.equal(unauthorized.address);
-    });
-
-    it("Should not allow transfer when paused", async function () {
-      await certificateNFT.connect(owner).pause();
-
-      await expect(
-        certificateNFT
-          .connect(recipient)
-          .transferFrom(recipient.address, unauthorized.address, 1)
-      ).to.be.reverted;
     });
   });
 });

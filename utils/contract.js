@@ -22,11 +22,6 @@ const CERTIFICATE_NFT_ABI = [
   "function balanceOf(address owner) view returns (uint256)",
   "function tokenURI(uint256 tokenId) view returns (string)",
 
-  // Admin functions
-  "function pause()",
-  "function unpause()",
-  "function paused() view returns (bool)",
-
   // Events
   "event CertificateIssued(uint256 indexed tokenId, address indexed recipient, address indexed issuer, string ipfsHash, string certificateType)",
   "event CertificateRevoked(uint256 indexed tokenId, address indexed revoker)",
@@ -135,17 +130,6 @@ export async function issueCertificateOnChain({
     if (!hasIssuerRole) {
       throw new Error(
         "Account does not have ISSUER_ROLE. Please contact an admin to grant you issuer permissions."
-      );
-    }
-
-    // Check if contract is paused
-    console.log("🔍 DEBUG: Checking if contract is paused...");
-    const isPaused = await contract.paused();
-    console.log("🔍 DEBUG: Contract paused:", isPaused);
-
-    if (isPaused) {
-      throw new Error(
-        "Certificate issuance is currently paused. Please contact an admin to unpause the contract."
       );
     }
 
@@ -904,183 +888,15 @@ export const checkUserRoles = async (address) => {
 };
 
 /**
- * Unpause the contract (admin only)
- */
-export async function unpauseContract() {
-  try {
-    const contract = await getContractWrite();
-
-    // Check if user is admin
-    const signerAddress = await contract.runner.getAddress();
-    const isAdmin = await contract.isAdmin(signerAddress);
-
-    if (!isAdmin) {
-      throw new Error("Only admins can unpause the contract");
-    }
-
-    let tx;
-    try {
-      tx = await contract.unpause();
-    } catch (txError) {
-      console.error("Error during unpause transaction submission:", txError);
-
-      if (isUserRejectionError(txError)) {
-        return {
-          success: false,
-          error: "Transaction was rejected by user.",
-          userRejected: true,
-        };
-      }
-
-      throw txError;
-    }
-
-    let receipt;
-    try {
-      receipt = await tx.wait();
-    } catch (waitError) {
-      console.error("Error during unpause transaction waiting:", waitError);
-
-      if (isUserRejectionError(waitError)) {
-        return {
-          success: false,
-          error: "Transaction was rejected by user.",
-          userRejected: true,
-        };
-      }
-
-      throw waitError;
-    }
-
-    return {
-      success: true,
-      transactionHash: receipt.transactionHash,
-    };
-  } catch (error) {
-    console.error("Error unpausing contract:", error);
-
-    // Check for user rejection first
-    if (isUserRejectionError(error)) {
-      return {
-        success: false,
-        error: "Transaction was rejected by user.",
-        userRejected: true,
-      };
-    }
-
-    // Provide more user-friendly error messages for other errors
-    let userFriendlyMessage = error.message;
-
-    if (error.message.includes("insufficient funds")) {
-      userFriendlyMessage =
-        "Insufficient ETH for gas fees. Please add more ETH to your wallet.";
-    } else if (error.code === "CALL_EXCEPTION") {
-      userFriendlyMessage =
-        "Smart contract call failed. This could be due to insufficient permissions or the contract may already be unpaused.";
-    }
-
-    return {
-      success: false,
-      error: userFriendlyMessage,
-    };
-  }
-}
-
-/**
- * Pause the contract (admin only)
- */
-export async function pauseContract() {
-  try {
-    const contract = await getContractWrite();
-
-    // Check if user is admin
-    const signerAddress = await contract.runner.getAddress();
-    const isAdmin = await contract.isAdmin(signerAddress);
-
-    if (!isAdmin) {
-      throw new Error("Only admins can pause the contract");
-    }
-
-    let tx;
-    try {
-      tx = await contract.pause();
-    } catch (txError) {
-      console.error("Error during pause transaction submission:", txError);
-
-      if (isUserRejectionError(txError)) {
-        return {
-          success: false,
-          error: "Transaction was rejected by user.",
-          userRejected: true,
-        };
-      }
-
-      throw txError;
-    }
-
-    let receipt;
-    try {
-      receipt = await tx.wait();
-    } catch (waitError) {
-      console.error("Error during pause transaction waiting:", waitError);
-
-      if (isUserRejectionError(waitError)) {
-        return {
-          success: false,
-          error: "Transaction was rejected by user.",
-          userRejected: true,
-        };
-      }
-
-      throw waitError;
-    }
-
-    return {
-      success: true,
-      transactionHash: receipt.transactionHash,
-    };
-  } catch (error) {
-    console.error("Error pausing contract:", error);
-
-    // Check for user rejection first
-    if (isUserRejectionError(error)) {
-      return {
-        success: false,
-        error: "Transaction was rejected by user.",
-        userRejected: true,
-      };
-    }
-
-    // Provide more user-friendly error messages for other errors
-    let userFriendlyMessage = error.message;
-
-    if (error.message.includes("insufficient funds")) {
-      userFriendlyMessage =
-        "Insufficient ETH for gas fees. Please add more ETH to your wallet.";
-    } else if (error.code === "CALL_EXCEPTION") {
-      userFriendlyMessage =
-        "Smart contract call failed. This could be due to insufficient permissions or the contract may already be paused.";
-    }
-
-    return {
-      success: false,
-      error: userFriendlyMessage,
-    };
-  }
-}
-
-/**
- * Check if contract is paused
+ * Get contract status
  */
 export async function getContractStatus() {
   try {
     const contract = await getContractRead();
-    const isPaused = await contract.paused();
     const totalCertificates = await contract.getTotalCertificates();
 
     return {
       success: true,
-      isPaused,
       totalCertificates: Number(totalCertificates),
     };
   } catch (error) {

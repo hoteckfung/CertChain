@@ -4,13 +4,12 @@ pragma solidity ^0.8.20;
 import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 import "@openzeppelin/contracts/token/ERC721/extensions/ERC721URIStorage.sol";
 import "@openzeppelin/contracts/access/AccessControl.sol";
-import "@openzeppelin/contracts/utils/Pausable.sol";
 
 /**
  * @title CertificateNFT
  * @dev Smart contract for managing certificates as NFTs with role-based access control
  */
-contract CertificateNFT is ERC721, ERC721URIStorage, AccessControl, Pausable {
+contract CertificateNFT is ERC721, ERC721URIStorage, AccessControl {
     // Role definitions
     bytes32 public constant ADMIN_ROLE = keccak256("ADMIN_ROLE");
     bytes32 public constant ISSUER_ROLE = keccak256("ISSUER_ROLE");
@@ -69,7 +68,7 @@ contract CertificateNFT is ERC721, ERC721URIStorage, AccessControl, Pausable {
         string memory certificateType,
         string memory recipientName,
         string memory issuerName
-    ) public onlyRole(ISSUER_ROLE) whenNotPaused returns (uint256) {
+    ) public onlyRole(ISSUER_ROLE) returns (uint256) {
         require(recipient != address(0), "Invalid recipient address");
         require(bytes(ipfsHash).length > 0, "IPFS hash cannot be empty");
         require(
@@ -204,20 +203,6 @@ contract CertificateNFT is ERC721, ERC721URIStorage, AccessControl, Pausable {
     }
 
     /**
-     * @dev Pause the contract (admin only)
-     */
-    function pause() public onlyRole(ADMIN_ROLE) {
-        _pause();
-    }
-
-    /**
-     * @dev Unpause the contract (admin only)
-     */
-    function unpause() public onlyRole(ADMIN_ROLE) {
-        _unpause();
-    }
-
-    /**
      * @dev Check if an address has admin role
      * @param account Address to check
      * @return Whether the address has admin role
@@ -240,7 +225,7 @@ contract CertificateNFT is ERC721, ERC721URIStorage, AccessControl, Pausable {
         address to,
         uint256 tokenId,
         address auth
-    ) internal override whenNotPaused returns (address) {
+    ) internal override returns (address) {
         return super._update(to, tokenId, auth);
     }
 
