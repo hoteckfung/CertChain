@@ -37,6 +37,7 @@ services:
       - "3000:3000"
     environment:
       - NODE_ENV=production
+      - DOCKER_CONTAINER=true
       - MYSQL_HOST=mysql
       - MYSQL_PORT=3306
       - MYSQL_USER=certchain_user
