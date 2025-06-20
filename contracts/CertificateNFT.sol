@@ -4,13 +4,12 @@ pragma solidity ^0.8.20;
 import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 import "@openzeppelin/contracts/token/ERC721/extensions/ERC721URIStorage.sol";
 import "@openzeppelin/contracts/access/AccessControl.sol";
-import "@openzeppelin/contracts/utils/Pausable.sol";
 
 /**
  * @title CertificateNFT
  * @dev Smart contract for managing certificates as NFTs with role-based access control
  */
-contract CertificateNFT is ERC721, ERC721URIStorage, AccessControl, Pausable {
+contract CertificateNFT is ERC721, ERC721URIStorage, AccessControl {
     // Role definitions
     bytes32 public constant ADMIN_ROLE = keccak256("ADMIN_ROLE");
     bytes32 public constant ISSUER_ROLE = keccak256("ISSUER_ROLE");
@@ -69,7 +68,7 @@ contract CertificateNFT is ERC721, ERC721URIStorage, AccessControl, Pausable {
         string memory certificateType,
         string memory recipientName,
         string memory issuerName
-    ) public onlyRole(ISSUER_ROLE) whenNotPaused returns (uint256) {
+    ) public onlyRole(ISSUER_ROLE) returns (uint256) {
         require(recipient != address(0), "Invalid recipient address");
         require(bytes(ipfsHash).length > 0, "IPFS hash cannot be empty");
         require(
@@ -144,32 +143,6 @@ contract CertificateNFT is ERC721, ERC721URIStorage, AccessControl, Pausable {
     }
 
     /**
-     * @dev Verify a certificate by token ID
-     * @param tokenId Token ID of the certificate to verify
-     * @return exists Whether the certificate exists
-     * @return isValid Whether the certificate is valid (not revoked)
-     * @return certificate The certificate data
-     */
-    function verifyCertificateById(
-        uint256 tokenId
-    )
-        public
-        view
-        returns (bool exists, bool isValid, Certificate memory certificate)
-    {
-        if (tokenId == 0 || tokenId > _tokenIdCounter) {
-            return (
-                false,
-                false,
-                Certificate(0, address(0), address(0), "", "", "", "", 0, false)
-            );
-        }
-
-        Certificate memory cert = certificates[tokenId];
-        return (true, cert.isValid, cert);
-    }
-
-    /**
      * @dev Get all certificates for a specific user
      * @param user Address of the user
      * @return Certificate array containing all user's certificates
@@ -188,7 +161,7 @@ contract CertificateNFT is ERC721, ERC721URIStorage, AccessControl, Pausable {
     }
 
     /**
-     * @dev Revoke a certificate (admin or issuer only)
+     * @dev Revoke a certificate (issuer only)
      * @param tokenId Token ID of the certificate to revoke
      */
     function revokeCertificate(uint256 tokenId) public {
@@ -196,8 +169,8 @@ contract CertificateNFT is ERC721, ERC721URIStorage, AccessControl, Pausable {
 
         Certificate storage cert = certificates[tokenId];
         require(
-            hasRole(ADMIN_ROLE, msg.sender) || cert.issuer == msg.sender,
-            "Only admin or original issuer can revoke certificate"
+            cert.issuer == msg.sender,
+            "Only original issuer can revoke certificate"
         );
         require(cert.isValid, "Certificate is already revoked");
 
@@ -230,20 +203,6 @@ contract CertificateNFT is ERC721, ERC721URIStorage, AccessControl, Pausable {
     }
 
     /**
-     * @dev Pause the contract (admin only)
-     */
-    function pause() public onlyRole(ADMIN_ROLE) {
-        _pause();
-    }
-
-    /**
-     * @dev Unpause the contract (admin only)
-     */
-    function unpause() public onlyRole(ADMIN_ROLE) {
-        _unpause();
-    }
-
-    /**
      * @dev Check if an address has admin role
      * @param account Address to check
      * @return Whether the address has admin role
@@ -266,7 +225,7 @@ contract CertificateNFT is ERC721, ERC721URIStorage, AccessControl, Pausable {
         address to,
         uint256 tokenId,
         address auth
-    ) internal override whenNotPaused returns (address) {
+    ) internal override returns (address) {
         return super._update(to, tokenId, auth);
     }
 

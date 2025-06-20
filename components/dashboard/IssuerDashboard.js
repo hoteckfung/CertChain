@@ -8,7 +8,6 @@ import {
   connectWallet,
   issueCertificateOnChain,
   revokeCertificate,
-  unpauseContract,
   getContractStatus,
 } from "../../utils/contract";
 import { isResultUserRejection } from "../../utils/errorHandling";
@@ -88,7 +87,7 @@ export default function IssuerDashboard({ activeTab, user }) {
   // Blockchain connection state
   const [isWalletConnected, setIsWalletConnected] = useState(false);
   const [isIssuer, setIsIssuer] = useState(false);
-  const [contractPaused, setContractPaused] = useState(false);
+
   const [isAdmin, setIsAdmin] = useState(false);
   const [isCheckingStatus, setIsCheckingStatus] = useState(false);
 
@@ -940,131 +939,6 @@ export default function IssuerDashboard({ activeTab, user }) {
     setRevokeConfirmModal({ show: false, certificate: null });
   };
 
-  const renderBlockchainStatus = () => (
-    <div className="bg-white rounded-lg shadow-sm p-6 mb-8">
-      <h2 className="text-lg font-semibold mb-4 flex items-center">
-        🔗 Blockchain Status
-        {isCheckingStatus && (
-          <span className="ml-2 text-sm text-gray-500">Checking...</span>
-        )}
-      </h2>
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        {/* Wallet Connection */}
-        <div className="flex items-center justify-between p-4 border rounded-lg">
-          <div>
-            <p className="text-sm text-gray-600">Wallet</p>
-            <p
-              className={`font-medium ${
-                isWalletConnected ? "text-green-600" : "text-red-600"
-              }`}>
-              {isWalletConnected ? "Connected" : "Not Connected"}
-            </p>
-            {isWalletConnected && walletAddress && (
-              <p className="text-xs text-gray-500 mt-1">
-                {walletAddress.slice(0, 6)}...{walletAddress.slice(-4)}
-              </p>
-            )}
-          </div>
-          {!isWalletConnected && (
-            <button
-              onClick={checkBlockchainStatus}
-              disabled={isCheckingStatus}
-              className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-blue-700 disabled:opacity-50">
-              {isCheckingStatus ? "Connecting..." : "Connect Wallet"}
-            </button>
-          )}
-        </div>
-
-        {/* Contract Status */}
-        <div className="flex items-center justify-between p-4 border rounded-lg">
-          <div>
-            <p className="text-sm text-gray-600">Smart Contract</p>
-            <p
-              className={`font-medium ${
-                contractAddress && contractAddress !== "0x..."
-                  ? "text-green-600"
-                  : "text-yellow-600"
-              }`}>
-              {contractAddress && contractAddress !== "0x..."
-                ? "Deployed"
-                : "Not Deployed"}
-            </p>
-            {contractAddress && contractAddress !== "0x..." && (
-              <p className="text-xs text-gray-500 mt-1">
-                {contractAddress.slice(0, 6)}...{contractAddress.slice(-4)}
-              </p>
-            )}
-          </div>
-        </div>
-
-        {/* Contract Pause Status */}
-        <div className="flex items-center justify-between p-4 border rounded-lg">
-          <div>
-            <p className="text-sm text-gray-600">Contract Status</p>
-            <p
-              className={`font-medium ${
-                contractPaused ? "text-red-600" : "text-green-600"
-              }`}>
-              {contractPaused ? (
-                <>
-                  <i className="bx bx-pause-circle"></i> Paused
-                </>
-              ) : (
-                <>
-                  <i className="bx bx-play-circle"></i> Active
-                </>
-              )}
-            </p>
-            {contractPaused && (
-              <p className="text-xs text-gray-500 mt-1">
-                Certificate issuance disabled
-              </p>
-            )}
-          </div>
-          {contractPaused && isAdmin && (
-            <button
-              onClick={handleUnpauseContract}
-              disabled={isCheckingStatus}
-              className="bg-green-600 text-white px-3 py-1 rounded text-sm hover:bg-green-700 disabled:opacity-50">
-              {isCheckingStatus ? "..." : "Unpause"}
-            </button>
-          )}
-        </div>
-      </div>
-
-      {(!contractAddress || contractAddress === "0x...") && (
-        <div className="mt-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
-          <p className="text-yellow-800 text-sm">
-            ⚠️ <strong>Smart contract not deployed.</strong> Please deploy your
-            CertificateNFT contract and update the NEXT_PUBLIC_CONTRACT_ADDRESS
-            environment variable.
-          </p>
-        </div>
-      )}
-
-      {contractPaused && (
-        <div className="mt-4 p-4 bg-red-50 border border-red-200 rounded-lg">
-          <p className="text-red-800 text-sm">
-            🚨 <strong>Contract is paused.</strong> Certificate issuance is
-            currently disabled.
-            {isAdmin
-              ? " Click the Unpause button above to resume operations."
-              : " Contact an admin to unpause the contract."}
-          </p>
-        </div>
-      )}
-
-      {!isWalletConnected && (
-        <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-          <p className="text-blue-800 text-sm">
-            ℹ️ <strong>Connect your wallet</strong> to check your issuer role
-            and begin issuing certificates.
-          </p>
-        </div>
-      )}
-    </div>
-  );
-
   const checkBlockchainStatus = async () => {
     setIsCheckingStatus(true);
     try {
@@ -1075,51 +949,17 @@ export default function IssuerDashboard({ activeTab, user }) {
         setIsIssuer(result.isIssuer);
         setIsAdmin(result.isAdmin);
         setContractAddress(result.contractAddress);
-
-        // Check contract status (paused state)
-        const statusResult = await getContractStatus();
-        if (statusResult.success) {
-          setContractPaused(statusResult.isPaused);
-        }
       } else {
         setIsWalletConnected(false);
         setWalletAddress("");
         setIsIssuer(false);
         setIsAdmin(false);
-        setContractPaused(false);
+
         setContractAddress("");
       }
     } catch (error) {
       console.error("Error checking blockchain status:", error);
       setIsWalletConnected(false);
-    } finally {
-      setIsCheckingStatus(false);
-    }
-  };
-
-  const handleUnpauseContract = async () => {
-    setIsCheckingStatus(true);
-    try {
-      showInfo("Unpausing contract...");
-      const result = await unpauseContract();
-
-      if (result.success) {
-        showSuccess("Contract unpaused successfully!");
-        // Refresh blockchain status
-        await checkBlockchainStatus();
-      } else {
-        // Handle user rejection gracefully
-        if (isResultUserRejection(result)) {
-          showInfo("Transaction was cancelled. Contract remains paused.");
-          return; // Exit early without showing error
-        }
-
-        showError(`Failed to unpause contract: ${result.error}`);
-      }
-    } catch (error) {
-      console.error("Error unpausing contract:", error);
-
-      showError("Failed to unpause contract");
     } finally {
       setIsCheckingStatus(false);
     }
@@ -1133,8 +973,6 @@ export default function IssuerDashboard({ activeTab, user }) {
         message={notification.message}
         onClose={hideNotification}
       />
-
-      {renderBlockchainStatus()}
 
       {/* Create Certificate Tab */}
       {activeTab === "create" && (

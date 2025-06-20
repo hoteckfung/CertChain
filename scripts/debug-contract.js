@@ -8,7 +8,6 @@ const CONTRACT_ABI = [
   "function isAdmin(address account) view returns (bool)",
   "function isIssuer(address account) view returns (bool)",
   "function getTotalCertificates() view returns (uint256)",
-  "function paused() view returns (bool)",
 ];
 
 async function debugContract() {
@@ -73,9 +72,6 @@ async function debugContract() {
     // Check contract status
     console.log("\n📊 Contract Status:");
     try {
-      const isPaused = await contract.paused();
-      console.log(`Contract paused: ${isPaused ? "❌ YES" : "✅ NO"}`);
-
       const totalCerts = await contract.getTotalCertificates();
       console.log(`Total certificates: ${totalCerts.toString()}`);
     } catch (error) {

@@ -7,50 +7,7 @@ function updateContractAddress(newAddress, deployerAddress = null) {
     console.log(`👤 Setting deployer address to: ${deployerAddress}`);
   }
 
-  // Update docker-compose.yml
-  const dockerComposePath = "docker-compose.yml";
-  try {
-    let dockerComposeContent = fs.readFileSync(dockerComposePath, "utf8");
-
-    // Replace the contract address in the build args
-    dockerComposeContent = dockerComposeContent.replace(
-      /NEXT_PUBLIC_CONTRACT_ADDRESS:\s*0x[a-fA-F0-9]+/,
-      `NEXT_PUBLIC_CONTRACT_ADDRESS: ${newAddress}`
-    );
-
-    // Also replace in environment section if it exists
-    dockerComposeContent = dockerComposeContent.replace(
-      /- NEXT_PUBLIC_CONTRACT_ADDRESS=0x[a-fA-F0-9]+/,
-      `- NEXT_PUBLIC_CONTRACT_ADDRESS=${newAddress}`
-    );
-
-    // Add or update deployer address if provided
-    if (deployerAddress) {
-      if (dockerComposeContent.includes("DEPLOYER_ADDRESS")) {
-        dockerComposeContent = dockerComposeContent.replace(
-          /DEPLOYER_ADDRESS:\s*0x[a-fA-F0-9]+/,
-          `DEPLOYER_ADDRESS: ${deployerAddress}`
-        );
-        dockerComposeContent = dockerComposeContent.replace(
-          /- DEPLOYER_ADDRESS=0x[a-fA-F0-9]+/,
-          `- DEPLOYER_ADDRESS=${deployerAddress}`
-        );
-      } else {
-        // Add deployer address after contract address
-        dockerComposeContent = dockerComposeContent.replace(
-          /NEXT_PUBLIC_CONTRACT_ADDRESS: 0x[a-fA-F0-9]+/,
-          `NEXT_PUBLIC_CONTRACT_ADDRESS: ${newAddress}\n          DEPLOYER_ADDRESS: ${deployerAddress}`
-        );
-      }
-    }
-
-    fs.writeFileSync(dockerComposePath, dockerComposeContent);
-    console.log("✅ Updated docker-compose.yml");
-  } catch (error) {
-    console.error("❌ Error updating docker-compose.yml:", error.message);
-  }
-
-  // Update .env
+  // Update .env file
   const envPath = ".env";
   try {
     let envContent = fs.readFileSync(envPath, "utf8");
@@ -84,12 +41,12 @@ function updateContractAddress(newAddress, deployerAddress = null) {
     console.log("👤 Deployer address set!");
   }
   console.log("📋 Next steps:");
-  console.log(
-    "   1. Clean database (optional): node scripts/clean-database.js"
-  );
-  console.log("   2. Rebuild Docker container: docker-compose build webapp");
-  console.log("   3. Restart container: docker-compose up -d webapp");
-  console.log("   4. Verify health: curl http://localhost:3000/api/health");
+  console.log("   🔧 REQUIRED: Rebuild Docker container:");
+  console.log("      docker-compose up --build -d webapp");
+  console.log("");
+  console.log("   📋 Optional steps:");
+  console.log("   - Clean database: node scripts/clean-database.js");
+  console.log("   - Verify health: curl http://localhost:3000/api/health");
 }
 
 // Get contract address and optional deployer address from command line arguments
